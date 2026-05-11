@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Calendar 2026</title>
-    <!-- Use the same logic and styling as your current calendar_2026.html -->
+    <title>Interactive Calendar 2026 - Cloud Connected</title>
     <style>
         :root {
             --bg-primary: #000000;
@@ -16,11 +15,7 @@
             --accent: #bd93f9;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             background-color: var(--bg-primary);
@@ -34,25 +29,10 @@
             overflow-x: auto;
         }
 
-        header {
-            margin-bottom: 30px;
-            text-align: center;
-            width: 100%;
-            max-width: 1200px;
-        }
+        header { margin-bottom: 30px; text-align: center; width: 100%; max-width: 1200px; }
+        h1 { font-size: 1.5rem; letter-spacing: 2px; margin-bottom: 10px; }
 
-        h1 {
-            font-size: 1.5rem;
-            letter-spacing: 2px;
-            margin-bottom: 10px;
-        }
-
-        .controls {
-            margin-top: 15px;
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-        }
+        .controls { margin-top: 15px; display: flex; justify-content: center; gap: 15px; }
 
         button.tool-btn {
             background: #222;
@@ -65,29 +45,11 @@
             transition: all 0.2s;
         }
 
-        button.tool-btn:hover {
-            background: #333;
-            border-color: #666;
-        }
+        button.tool-btn:hover { background: #333; border-color: #666; }
+        button.tool-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
 
-        button.tool-btn.active {
-            background: var(--accent);
-            color: #000;
-            border-color: var(--accent);
-        }
-
-        .instructions {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            margin-top: 10px;
-        }
-
-        kbd {
-            background: #333;
-            padding: 2px 4px;
-            border-radius: 3px;
-            color: #fff;
-        }
+        .instructions { font-size: 0.8rem; color: var(--text-muted); margin-top: 10px; }
+        kbd { background: #333; padding: 2px 4px; border-radius: 3px; color: #fff; }
 
         #calendar-container {
             display: grid;
@@ -140,181 +102,55 @@
             border: 1px solid transparent;
         }
 
-        .day:hover {
-            border-color: #555;
-        }
-
-        .day.selected {
-            background-color: var(--selection-bg);
-        }
-
-        .day.empty {
-            cursor: default;
-        }
+        .day:hover { border-color: #555; }
+        .day.selected { background-color: var(--selection-bg); }
+        .day.empty { cursor: default; }
 
         .stripe-container {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column-reverse; 
-            pointer-events: none;
-            padding-bottom: 2px;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column-reverse; 
+            pointer-events: none; padding-bottom: 2px;
         }
 
-        .event-stripe {
-            width: 100%;
-            height: 1px;
-            margin-top: 1px;
-        }
+        .event-stripe { width: 100%; height: 1px; margin-top: 1px; }
 
         .legend-panel {
-            flex: 1;
-            font-size: 0.65rem;
-            border-left: 1px solid var(--border-color);
-            padding-left: 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            overflow-y: auto;
-            max-height: 180px;
-            margin-top: 35px;
-            max-width: 150px;
+            flex: 1; font-size: 0.65rem; border-left: 1px solid var(--border-color);
+            padding-left: 8px; display: flex; flex-direction: column; gap: 4px;
+            overflow-y: auto; max-height: 180px; margin-top: 35px; max-width: 150px;
         }
 
-        .legend-item {
-            display: flex;
-            align-items: flex-start;
-            gap: 5px;
-            color: var(--text-main);
-            margin-bottom: 2px;
-        }
-
-        .legend-text {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .initials-tag {
-            color: var(--text-muted);
-            font-weight: bold;
-            margin-right: 2px;
-        }
-
-        .color-dot {
-            width: 10px;
-            height: 2px;
-            display: inline-block;
-            flex-shrink: 0;
-            margin-top: 6px;
-        }
+        .legend-item { display: flex; align-items: flex-start; gap: 5px; color: var(--text-main); margin-bottom: 2px; }
+        .legend-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .initials-tag { color: var(--text-muted); font-weight: bold; margin-right: 2px; }
+        .color-dot { width: 10px; height: 2px; display: inline-block; flex-shrink: 0; margin-top: 6px; }
 
         #event-modal {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #222;
-            border: 1px solid #444;
-            padding: 20px;
-            z-index: 1000;
-            box-shadow: 0 0 20px rgba(0,0,0,0.8);
-            width: 320px;
+            display: none; position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); background: #222; border: 1px solid #444;
+            padding: 20px; z-index: 1000; box-shadow: 0 0 20px rgba(0,0,0,0.8); width: 320px;
         }
 
-        #event-modal h3 {
-            margin-bottom: 15px;
-            font-size: 0.9rem;
-            color: #ddd;
-        }
-
-        .modal-field {
-            margin-bottom: 15px;
-        }
-
-        .modal-field label {
-            display: block;
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            margin-bottom: 5px;
-            text-transform: uppercase;
-        }
+        #event-modal h3 { margin-bottom: 15px; font-size: 0.9rem; color: #ddd; }
+        .modal-field { margin-bottom: 15px; }
+        .modal-field label { display: block; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; }
 
         #event-modal input[type="text"] {
-            width: 100%;
-            background: #000;
-            border: 1px solid #444;
-            color: #fff;
-            padding: 8px;
-            font-family: var(--font-mono);
+            width: 100%; background: #000; border: 1px solid #444;
+            color: #fff; padding: 8px; font-family: var(--font-mono);
         }
 
-        .color-picker {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
+        .color-picker { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+        .color-opt { width: 20px; height: 20px; cursor: pointer; border: 2px solid transparent; }
+        .color-opt.active { border-color: #fff; }
 
-        .color-opt {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-            border: 2px solid transparent;
-        }
+        .modal-btns { display: flex; justify-content: flex-end; gap: 10px; }
+        .modal-btns button { padding: 5px 12px; cursor: pointer; background: #333; border: 1px solid #555; color: white; font-family: var(--font-mono); }
 
-        .color-opt.active {
-            border-color: #fff;
-        }
-
-        .modal-btns {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-
-        .modal-btns button {
-            padding: 5px 12px;
-            cursor: pointer;
-            background: #333;
-            border: 1px solid #555;
-            color: white;
-            font-family: var(--font-mono);
-        }
-
-        #overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            z-index: 999;
-        }
-
-        #loading-indicator {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            font-size: 0.7rem;
-            color: var(--text-muted);
-        }
-
-        .toast {
-            position: fixed;
-            bottom: 60px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--accent);
-            color: #000;
-            padding: 8px 16px;
-            font-size: 0.8rem;
-            border-radius: 4px;
-            display: none;
-            z-index: 2000;
-        }
+        #overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
+        #loading-indicator { position: fixed; bottom: 20px; right: 20px; font-size: 0.7rem; color: var(--text-muted); }
+        .toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #000; padding: 8px 16px; font-size: 0.8rem; border-radius: 4px; display: none; z-index: 2000; }
     </style>
 </head>
 <body>
@@ -359,12 +195,41 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Environment variables will be injected by the hosting provider or remain as defaults
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // --- PASTE YOUR FIREBASE CONFIG HERE ---
+        const userFirebaseConfig = {
+            apiKey: "AIzaSyDiK4IE76BtbynIxtfd2jdmDG73an66znc",
+            authDomain: "nusscalendar-a4862.firebaseapp.com",
+            projectId: "nusscalendar-a4862",
+            storageBucket: "nusscalendar-a4862.firebasestorage.app",
+            messagingSenderId: "1062471022470",
+            appId: "1:1062471022470:web:279d68596c64790ba09e07"
+        };
+        // ----------------------------------------
+
+        let firebaseConfig = {};
+        let appId = 'default-app-id';
+
+        // Check for environment variables (Preview Mode) OR User Config (Standalone Mode)
+        try {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                firebaseConfig = JSON.parse(__firebase_config);
+            } else if (userFirebaseConfig.apiKey) {
+                firebaseConfig = userFirebaseConfig;
+            }
+            if (typeof __app_id !== 'undefined' && __app_id) {
+                appId = __app_id;
+            }
+        } catch (e) {
+            console.log("Using provided user config.");
+        }
+
+        let db = null;
+        let auth = null;
+        if (firebaseConfig && firebaseConfig.apiKey) {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        }
 
         const container = document.getElementById('calendar-container');
         const modal = document.getElementById('event-modal');
@@ -388,7 +253,6 @@
         let filterMyEvents = false;
         let allEvents = [];
 
-        // UI Prep
         presetColors.forEach(c => {
             const div = document.createElement('div');
             div.className = 'color-opt';
@@ -525,51 +389,67 @@
         document.getElementById('btn-save').onclick = async () => {
             const note = noteInput.value.trim();
             const initials = initialsInput.value.trim().toUpperCase() || '??';
-            if (note && currentUser) {
+            if (note) {
                 localStorage.setItem('cal_initials', initials);
                 const days = Array.from(selectionPool).map(d => ({
                     m: parseInt(d.dataset.m),
                     d: parseInt(d.dataset.d)
                 }));
                 
-                try {
-                    loadingIndicator.textContent = "Syncing...";
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), {
-                        note,
-                        initials,
-                        color: selectedColor,
-                        days,
-                        timestamp: Date.now(),
-                        userId: currentUser.uid
-                    });
-                } catch (err) {
-                    console.error("Save error:", err);
+                if (db && currentUser) {
+                    try {
+                        loadingIndicator.textContent = "Syncing...";
+                        // PATH RULE 1: /artifacts/{appId}/public/data/{collectionName}
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), {
+                            note,
+                            initials,
+                            color: selectedColor,
+                            days,
+                            timestamp: Date.now(),
+                            userId: currentUser.uid
+                        });
+                    } catch (err) {
+                        console.error("Save error:", err);
+                    }
+                } else {
+                    allEvents.push({ note, initials, color: selectedColor, days, timestamp: Date.now(), userId: 'local-user' });
+                    renderEvents();
                 }
             }
             hideModal();
         };
 
         const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
+            if (!auth) {
+                loadingIndicator.textContent = "Local Mode (No Firebase Config)";
+                return;
+            }
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (e) {
+                loadingIndicator.textContent = "Auth Offline";
             }
         };
 
-        onAuthStateChanged(auth, (user) => {
-            currentUser = user;
-            if (user) {
-                loadingIndicator.textContent = "Live Connected";
-                startListening();
-            }
-        });
+        if (auth) {
+            onAuthStateChanged(auth, (user) => {
+                currentUser = user;
+                if (user) {
+                    loadingIndicator.textContent = "Cloud Active";
+                    startListening();
+                }
+            });
+        }
 
         function renderEvents() {
             document.querySelectorAll('.stripe-container').forEach(c => c.innerHTML = '');
             document.querySelectorAll('.legend-panel').forEach(l => l.innerHTML = '');
 
-            const visibleEvents = filterMyEvents 
+            const visibleEvents = (filterMyEvents && currentUser)
                 ? allEvents.filter(e => e.userId === currentUser.uid) 
                 : allEvents;
 
@@ -605,12 +485,15 @@
         }
 
         function startListening() {
+            if (!db) return;
+            // RULE 1: Consistent pathing
             const q = collection(db, 'artifacts', appId, 'public', 'data', 'events');
             onSnapshot(q, (snapshot) => {
                 allEvents = snapshot.docs.map(doc => doc.data());
                 renderEvents();
             }, (err) => {
-                loadingIndicator.textContent = "Sync Error";
+                console.error("Snapshot error:", err);
+                loadingIndicator.textContent = "Sync Limited";
             });
         }
 
