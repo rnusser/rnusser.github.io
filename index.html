@@ -172,10 +172,6 @@
     <div id="event-modal">
         <h3>New Entry</h3>
         <div class="modal-field">
-            <label>Initials (Optional)</label>
-            <input type="text" id="event-initials" maxlength="3" placeholder="ABC" style="width: 60px">
-        </div>
-        <div class="modal-field">
             <label>Description</label>
             <input type="text" id="event-note" placeholder="Meeting, Holiday, etc." autocomplete="off">
         </div>
@@ -230,7 +226,6 @@
         const modal = document.getElementById('event-modal');
         const overlay = document.getElementById('overlay');
         const noteInput = document.getElementById('event-note');
-        const initialsInput = document.getElementById('event-initials');
         const colorPicker = document.getElementById('color-picker');
         const loadingIndicator = document.getElementById('loading-indicator');
         const userInfo = document.getElementById('user-info');
@@ -261,6 +256,15 @@
             };
             colorPicker.appendChild(div);
         });
+
+        function getInitials(name) {
+            if (!name) return "??";
+            const parts = name.trim().split(/\s+/);
+            if (parts.length >= 2) {
+                return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+            }
+            return name.substring(0, 2).toUpperCase();
+        }
 
         function initCalendarUI() {
             container.innerHTML = '';
@@ -333,7 +337,11 @@
 
         function showModal() {
             if (!currentUser && auth) {
-                alert("Please sign in with Google to add entries.");
+                const dummy = document.createElement('div');
+                dummy.style.cssText = "position:fixed;top:20px;background:red;padding:10px;z-index:9999;color:white;";
+                dummy.innerText = "Please sign in with Google to add entries.";
+                document.body.appendChild(dummy);
+                setTimeout(() => dummy.remove(), 3000);
                 clearSelectionPool();
                 return;
             }
@@ -359,18 +367,18 @@
                     await signInWithPopup(auth, provider);
                 } catch (err) {
                     console.error("Auth error", err);
+                    if (err.code === 'auth/unauthorized-domain') {
+                        alert("Error: This domain (rnusser.github.io) is not authorized in your Firebase console. Please add it to 'Authorized Domains' in Authentication settings.");
+                    } else {
+                        alert("Sign in failed: " + err.message);
+                    }
                 }
             }
         };
 
         document.getElementById('btn-save').onclick = async () => {
             const note = noteInput.value.trim();
-            let initials = initialsInput.value.trim().toUpperCase();
-            
-            // If user logged in and initials empty, try to get from name
-            if (!initials && currentUser) {
-                initials = currentUser.displayName ? currentUser.displayName.substring(0, 2).toUpperCase() : '??';
-            }
+            const initials = getInitials(currentUser ? currentUser.displayName : "Guest");
 
             if (note) {
                 const days = Array.from(selectionPool).map(d => ({
@@ -413,7 +421,7 @@
                     loadingIndicator.textContent = "Read Only Mode";
                     allEvents = [];
                     renderEvents();
-                    startListening(); // Listen even if not logged in (Public data)
+                    startListening(); 
                 }
             });
         }
@@ -439,7 +447,8 @@
                 });
 
                 if (days.length > 0) {
-                    const firstMonth = [...days].sort((a,b) => a.m - b.m || a.d - b.d)[0].m;
+                    const sorted = [...days].sort((a,b) => a.m - b.m || a.d - b.d);
+                    const firstMonth = sorted[0].m;
                     const legendPanel = document.getElementById(`legend-${firstMonth}`);
                     if (legendPanel) {
                         const item = document.createElement('div');
