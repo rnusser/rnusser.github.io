@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Calendar 2026 - Cloud Connected</title>
+    <title>Interactive Calendar 2026 - Google Auth</title>
     <style>
         :root {
             --bg-primary: #000000;
@@ -32,7 +32,7 @@
         header { margin-bottom: 30px; text-align: center; width: 100%; max-width: 1200px; }
         h1 { font-size: 1.5rem; letter-spacing: 2px; margin-bottom: 10px; }
 
-        .controls { margin-top: 15px; display: flex; justify-content: center; gap: 15px; }
+        .controls { margin-top: 15px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
 
         button.tool-btn {
             background: #222;
@@ -47,6 +47,9 @@
 
         button.tool-btn:hover { background: #333; border-color: #666; }
         button.tool-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+        
+        #btn-login { border-color: var(--accent); color: var(--accent); }
+        #user-info { font-size: 0.7rem; color: var(--accent); margin-top: 5px; }
 
         .instructions { font-size: 0.8rem; color: var(--text-muted); margin-top: 10px; }
         kbd { background: #333; padding: 2px 4px; border-radius: 3px; color: #fff; }
@@ -86,12 +89,7 @@
             margin-bottom: 5px;
         }
 
-        .weekday-header {
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            text-align: center;
-            line-height: 24px;
-        }
+        .weekday-header { color: var(--text-muted); font-size: 0.75rem; text-align: center; line-height: 24px; }
 
         .day {
             position: relative;
@@ -157,22 +155,24 @@
 
     <header>
         <h1>CALENDAR 2026</h1>
+        <div id="user-info">Checking status...</div>
         <div class="controls">
+            <button id="btn-login" class="tool-btn">SIGN IN WITH GOOGLE</button>
             <button id="btn-share" class="tool-btn">SHARE LINK</button>
             <button id="btn-filter-me" class="tool-btn">MY ENTRIES ONLY</button>
         </div>
-        <p class="instructions">Drag to select. Hold <kbd>Shift</kbd> to add ranges. Release <kbd>Shift</kbd> to tag.</p>
+        <p class="instructions">Drag to select. Release <kbd>Shift</kbd> or Mouse to save.</p>
     </header>
 
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
-    <div id="toast" class="toast">Link copied to clipboard!</div>
+    <div id="toast" class="toast">Link copied!</div>
 
     <div id="overlay"></div>
     <div id="event-modal">
         <h3>New Entry</h3>
         <div class="modal-field">
-            <label>Initials</label>
+            <label>Initials (Optional)</label>
             <input type="text" id="event-initials" maxlength="3" placeholder="ABC" style="width: 60px">
         </div>
         <div class="modal-field">
@@ -189,10 +189,9 @@
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- PASTE YOUR FIREBASE CONFIG HERE ---
@@ -209,7 +208,6 @@
         let firebaseConfig = {};
         let appId = 'default-app-id';
 
-        // Check for environment variables (Preview Mode) OR User Config (Standalone Mode)
         try {
             if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                 firebaseConfig = JSON.parse(__firebase_config);
@@ -219,12 +217,9 @@
             if (typeof __app_id !== 'undefined' && __app_id) {
                 appId = __app_id;
             }
-        } catch (e) {
-            console.log("Using provided user config.");
-        }
+        } catch (e) { console.log("Standard Mode"); }
 
-        let db = null;
-        let auth = null;
+        let db = null, auth = null;
         if (firebaseConfig && firebaseConfig.apiKey) {
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
@@ -238,7 +233,8 @@
         const initialsInput = document.getElementById('event-initials');
         const colorPicker = document.getElementById('color-picker');
         const loadingIndicator = document.getElementById('loading-indicator');
-        const toast = document.getElementById('toast');
+        const userInfo = document.getElementById('user-info');
+        const btnLogin = document.getElementById('btn-login');
         const btnFilterMe = document.getElementById('btn-filter-me');
         const btnShare = document.getElementById('btn-share');
         
@@ -266,8 +262,6 @@
             colorPicker.appendChild(div);
         });
 
-        initialsInput.value = localStorage.getItem('cal_initials') || '';
-
         function initCalendarUI() {
             container.innerHTML = '';
             for (let m = 0; m < 12; m++) {
@@ -282,8 +276,7 @@
 
                 weekdays.forEach(wd => {
                     const h = document.createElement('div');
-                    h.className = 'weekday-header';
-                    h.textContent = wd;
+                    h.className = 'weekday-header'; h.textContent = wd;
                     grid.appendChild(h);
                 });
 
@@ -292,8 +285,7 @@
 
                 for (let i = 0; i < firstDay; i++) {
                     const empty = document.createElement('div');
-                    empty.className = 'day empty';
-                    grid.appendChild(empty);
+                    empty.className = 'day empty'; grid.appendChild(empty);
                 }
 
                 for (let d = 1; d <= totalDays; d++) {
@@ -301,8 +293,7 @@
                     day.className = 'day';
                     day.id = `day-${m}-${d}`;
                     day.textContent = d;
-                    day.dataset.m = m;
-                    day.dataset.d = d;
+                    day.dataset.m = m; day.dataset.d = d;
                     const stripes = document.createElement('div');
                     stripes.className = 'stripe-container';
                     day.appendChild(stripes);
@@ -313,9 +304,7 @@
                         if (!e.shiftKey) clearSelectionPool();
                         addToSelection(day);
                     });
-                    day.addEventListener('mouseenter', () => {
-                        if (isDragging) addToSelection(day);
-                    });
+                    day.addEventListener('mouseenter', () => { if (isDragging) addToSelection(day); });
                     grid.appendChild(day);
                 }
 
@@ -329,15 +318,8 @@
             }
         }
 
-        function addToSelection(day) {
-            day.classList.add('selected');
-            selectionPool.add(day);
-        }
-
-        function clearSelectionPool() {
-            selectionPool.forEach(el => el.classList.remove('selected'));
-            selectionPool.clear();
-        }
+        function addToSelection(day) { day.classList.add('selected'); selectionPool.add(day); }
+        function clearSelectionPool() { selectionPool.forEach(el => el.classList.remove('selected')); selectionPool.clear(); }
 
         window.addEventListener('mouseup', (e) => {
             if (!isDragging) return;
@@ -350,6 +332,11 @@
         });
 
         function showModal() {
+            if (!currentUser && auth) {
+                alert("Please sign in with Google to add entries.");
+                clearSelectionPool();
+                return;
+            }
             modal.style.display = 'block';
             overlay.style.display = 'block';
             noteInput.focus();
@@ -362,35 +349,30 @@
             clearSelectionPool();
         }
 
-        function showToast(msg) {
-            toast.textContent = msg;
-            toast.style.display = 'block';
-            setTimeout(() => { toast.style.display = 'none'; }, 2000);
-        }
-
-        btnShare.onclick = () => {
-            const dummy = document.createElement('input');
-            document.body.appendChild(dummy);
-            dummy.value = window.location.href;
-            dummy.select();
-            document.execCommand('copy');
-            document.body.removeChild(dummy);
-            showToast("Share link copied!");
+        btnLogin.onclick = async () => {
+            if (!auth) return;
+            if (currentUser) {
+                await signOut(auth);
+            } else {
+                const provider = new GoogleAuthProvider();
+                try {
+                    await signInWithPopup(auth, provider);
+                } catch (err) {
+                    console.error("Auth error", err);
+                }
+            }
         };
-
-        btnFilterMe.onclick = () => {
-            filterMyEvents = !filterMyEvents;
-            btnFilterMe.classList.toggle('active', filterMyEvents);
-            renderEvents();
-        };
-
-        document.getElementById('btn-cancel').onclick = hideModal;
 
         document.getElementById('btn-save').onclick = async () => {
             const note = noteInput.value.trim();
-            const initials = initialsInput.value.trim().toUpperCase() || '??';
+            let initials = initialsInput.value.trim().toUpperCase();
+            
+            // If user logged in and initials empty, try to get from name
+            if (!initials && currentUser) {
+                initials = currentUser.displayName ? currentUser.displayName.substring(0, 2).toUpperCase() : '??';
+            }
+
             if (note) {
-                localStorage.setItem('cal_initials', initials);
                 const days = Array.from(selectionPool).map(d => ({
                     m: parseInt(d.dataset.m),
                     d: parseInt(d.dataset.d)
@@ -398,49 +380,40 @@
                 
                 if (db && currentUser) {
                     try {
-                        loadingIndicator.textContent = "Syncing...";
-                        // PATH RULE 1: /artifacts/{appId}/public/data/{collectionName}
+                        loadingIndicator.textContent = "Saving...";
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), {
                             note,
                             initials,
                             color: selectedColor,
                             days,
                             timestamp: Date.now(),
-                            userId: currentUser.uid
+                            userId: currentUser.uid,
+                            userName: currentUser.displayName
                         });
-                    } catch (err) {
-                        console.error("Save error:", err);
-                    }
-                } else {
-                    allEvents.push({ note, initials, color: selectedColor, days, timestamp: Date.now(), userId: 'local-user' });
+                    } catch (err) { console.error(err); }
+                } else if (!auth) {
+                    allEvents.push({ note, initials, color: selectedColor, days, timestamp: Date.now(), userId: 'local' });
                     renderEvents();
                 }
             }
             hideModal();
         };
 
-        const initAuth = async () => {
-            if (!auth) {
-                loadingIndicator.textContent = "Local Mode (No Firebase Config)";
-                return;
-            }
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (e) {
-                loadingIndicator.textContent = "Auth Offline";
-            }
-        };
-
         if (auth) {
             onAuthStateChanged(auth, (user) => {
                 currentUser = user;
                 if (user) {
+                    userInfo.textContent = `Signed in as: ${user.displayName || user.email}`;
+                    btnLogin.textContent = "SIGN OUT";
                     loadingIndicator.textContent = "Cloud Active";
                     startListening();
+                } else {
+                    userInfo.textContent = "Not signed in";
+                    btnLogin.textContent = "SIGN IN WITH GOOGLE";
+                    loadingIndicator.textContent = "Read Only Mode";
+                    allEvents = [];
+                    renderEvents();
+                    startListening(); // Listen even if not logged in (Public data)
                 }
             });
         }
@@ -466,18 +439,12 @@
                 });
 
                 if (days.length > 0) {
-                    const sortedDays = [...days].sort((a,b) => a.m - b.m || a.d - b.d);
-                    const firstMonth = sortedDays[0].m;
+                    const firstMonth = [...days].sort((a,b) => a.m - b.m || a.d - b.d)[0].m;
                     const legendPanel = document.getElementById(`legend-${firstMonth}`);
                     if (legendPanel) {
                         const item = document.createElement('div');
                         item.className = 'legend-item';
-                        item.innerHTML = `
-                            <span class="color-dot" style="background:${color}"></span> 
-                            <div class="legend-text">
-                                <span class="initials-tag">[${initials}]</span> <span>${note}</span>
-                            </div>
-                        `;
+                        item.innerHTML = `<span class="color-dot" style="background:${color}"></span><div class="legend-text"><span class="initials-tag">[${initials}]</span> <span>${note}</span></div>`;
                         legendPanel.appendChild(item);
                     }
                 }
@@ -486,19 +453,21 @@
 
         function startListening() {
             if (!db) return;
-            // RULE 1: Consistent pathing
             const q = collection(db, 'artifacts', appId, 'public', 'data', 'events');
             onSnapshot(q, (snapshot) => {
                 allEvents = snapshot.docs.map(doc => doc.data());
                 renderEvents();
-            }, (err) => {
-                console.error("Snapshot error:", err);
-                loadingIndicator.textContent = "Sync Limited";
-            });
+            }, (err) => { loadingIndicator.textContent = "Sync Error"; });
         }
 
+        document.getElementById('btn-cancel').onclick = hideModal;
+        btnFilterMe.onclick = () => { filterMyEvents = !filterMyEvents; btnFilterMe.classList.toggle('active', filterMyEvents); renderEvents(); };
+        btnShare.onclick = () => { 
+            const d = document.createElement('input'); document.body.appendChild(d); d.value = window.location.href; d.select(); document.execCommand('copy'); document.body.removeChild(d);
+            document.getElementById('toast').style.display='block'; setTimeout(()=>document.getElementById('toast').style.display='none',2000);
+        };
+
         initCalendarUI();
-        initAuth();
     </script>
 </body>
 </html>
