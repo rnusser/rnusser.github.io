@@ -380,7 +380,7 @@
             const note = noteInput.value.trim();
             const initials = getInitials(currentUser ? currentUser.displayName : "Guest");
 
-            if (note) {
+            if (note && selectionPool.size > 0) {
                 const days = Array.from(selectionPool).map(d => ({
                     m: parseInt(d.dataset.m),
                     d: parseInt(d.dataset.d)
@@ -398,13 +398,23 @@
                             userId: currentUser.uid,
                             userName: currentUser.displayName
                         });
-                    } catch (err) { console.error(err); }
+                        loadingIndicator.textContent = "Saved";
+                    } catch (err) { 
+                        console.error("Save error:", err);
+                        loadingIndicator.textContent = "Error saving";
+                        alert("Error saving to database. Check console for details.");
+                    }
                 } else if (!auth) {
+                    // Local mode fallback
                     allEvents.push({ note, initials, color: selectedColor, days, timestamp: Date.now(), userId: 'local' });
                     renderEvents();
                 }
+                
+                // Always close the modal after attempting to save
+                hideModal();
+            } else if (!note) {
+                alert("Please enter a description.");
             }
-            hideModal();
         };
 
         if (auth) {
@@ -466,7 +476,10 @@
             onSnapshot(q, (snapshot) => {
                 allEvents = snapshot.docs.map(doc => doc.data());
                 renderEvents();
-            }, (err) => { loadingIndicator.textContent = "Sync Error"; });
+            }, (err) => { 
+                console.error("Listener error:", err);
+                loadingIndicator.textContent = "Sync Error"; 
+            });
         }
 
         document.getElementById('btn-cancel').onclick = hideModal;
