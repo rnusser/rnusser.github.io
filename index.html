@@ -351,10 +351,13 @@
         }
 
         function hideModal() {
-            modal.style.display = 'none';
-            overlay.style.display = 'none';
-            noteInput.value = "";
-            clearSelectionPool();
+            noteInput.blur(); // Explicitly remove focus from input
+            requestAnimationFrame(() => {
+                modal.style.display = 'none';
+                overlay.style.display = 'none';
+                noteInput.value = "";
+                clearSelectionPool();
+            });
         }
 
         btnLogin.onclick = async () => {
@@ -402,15 +405,13 @@
                     } catch (err) { 
                         console.error("Save error:", err);
                         loadingIndicator.textContent = "Error saving";
-                        alert("Error saving to database. Check console for details.");
                     }
                 } else if (!auth) {
-                    // Local mode fallback
                     allEvents.push({ note, initials, color: selectedColor, days, timestamp: Date.now(), userId: 'local' });
                     renderEvents();
                 }
                 
-                // Always close the modal after attempting to save
+                // Close the modal immediately
                 hideModal();
             } else if (!note) {
                 alert("Please enter a description.");
