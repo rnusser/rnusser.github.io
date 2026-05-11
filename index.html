@@ -149,6 +149,17 @@
         #overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
         #loading-indicator { position: fixed; bottom: 20px; right: 20px; font-size: 0.7rem; color: var(--text-muted); }
         .toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #000; padding: 8px 16px; font-size: 0.8rem; border-radius: 4px; display: none; z-index: 2000; }
+        
+        /* Version Tag Style */
+        .version-tag {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            font-size: 0.6rem;
+            color: #444;
+            pointer-events: none;
+            letter-spacing: 1px;
+        }
     </style>
 </head>
 <body>
@@ -167,6 +178,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
+    <div class="version-tag">v1.0.8</div>
 
     <div id="overlay"></div>
     <div id="event-modal">
@@ -243,6 +255,7 @@
         let currentUser = null;
         let filterMyEvents = false;
         let allEvents = [];
+        let modalActive = false; // Guard to prevent re-opening on mouseup
 
         presetColors.forEach(c => {
             const div = document.createElement('div');
@@ -303,7 +316,7 @@
                     day.appendChild(stripes);
 
                     day.addEventListener('mousedown', (e) => {
-                        if (isDragging) return;
+                        if (isDragging || modalActive) return;
                         isDragging = true;
                         if (!e.shiftKey) clearSelectionPool();
                         addToSelection(day);
@@ -336,6 +349,7 @@
         });
 
         function showModal() {
+            if (modalActive) return;
             if (!currentUser && auth) {
                 const dummy = document.createElement('div');
                 dummy.style.cssText = "position:fixed;top:20px;background:red;padding:10px;z-index:9999;color:white;";
@@ -345,19 +359,20 @@
                 clearSelectionPool();
                 return;
             }
+            modalActive = true;
             modal.style.display = 'block';
             overlay.style.display = 'block';
             noteInput.focus();
         }
 
         function hideModal() {
-            noteInput.blur(); // Explicitly remove focus from input
-            requestAnimationFrame(() => {
-                modal.style.display = 'none';
-                overlay.style.display = 'none';
-                noteInput.value = "";
-                clearSelectionPool();
-            });
+            noteInput.blur();
+            modal.style.display = 'none';
+            overlay.style.display = 'none';
+            noteInput.value = "";
+            clearSelectionPool();
+            // Delay resetting modalActive slightly to allow click events to settle
+            setTimeout(() => { modalActive = false; }, 100);
         }
 
         btnLogin.onclick = async () => {
@@ -379,7 +394,10 @@
             }
         };
 
-        document.getElementById('btn-save').onclick = async () => {
+        document.getElementById('btn-save').onclick = async (e) => {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            
             const note = noteInput.value.trim();
             const initials = getInitials(currentUser ? currentUser.displayName : "Guest");
 
@@ -411,7 +429,6 @@
                     renderEvents();
                 }
                 
-                // Close the modal immediately
                 hideModal();
             } else if (!note) {
                 alert("Please enter a description.");
@@ -483,7 +500,12 @@
             });
         }
 
-        document.getElementById('btn-cancel').onclick = hideModal;
+        document.getElementById('btn-cancel').onclick = (e) => {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            hideModal();
+        };
+        
         btnFilterMe.onclick = () => { filterMyEvents = !filterMyEvents; btnFilterMe.classList.toggle('active', filterMyEvents); renderEvents(); };
         btnShare.onclick = () => { 
             const d = document.createElement('input'); document.body.appendChild(d); d.value = window.location.href; d.select(); document.execCommand('copy'); document.body.removeChild(d);
