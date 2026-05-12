@@ -178,7 +178,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.0.9</div>
+    <div class="version-tag">v1.1.0</div>
 
     <div id="overlay"></div>
     <div id="event-modal">
@@ -390,7 +390,7 @@
             }
             
             const note = noteInput.value.trim();
-            let initials = initialsInput.value.trim().toUpperCase();
+            const initialsVal = initialsInput.value.trim().toUpperCase();
             
             if (!note) {
                 alert("Please enter a description.");
@@ -398,12 +398,13 @@
             }
             
             if (selectionPool.size === 0) {
-                alert("No days selected. Please select days on the calendar first.");
+                alert("No days selected.");
                 hideModal();
                 return;
             }
 
-            // If user logged in and initials empty, try to get from name
+            // Capture data before hiding modal/clearing inputs
+            let initials = initialsVal;
             if (!initials && currentUser) {
                 initials = (currentUser.displayName || currentUser.email || "??").substring(0, 2).toUpperCase();
             } else if (!initials) {
@@ -425,21 +426,22 @@
                 userName: currentUser ? (currentUser.displayName || currentUser.email) : 'Guest'
             };
 
+            // IMMEDIATELY HIDE MODAL
+            hideModal();
+
             try {
                 if (db && currentUser) {
-                    loadingIndicator.textContent = "Saving...";
+                    loadingIndicator.textContent = "Saving to cloud...";
                     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), eventData);
-                    loadingIndicator.textContent = "Saved";
+                    loadingIndicator.textContent = "Cloud Active";
                 } else if (!auth) {
                     allEvents.push(eventData);
                     renderEvents();
                 }
             } catch (err) { 
                 console.error("Save error:", err);
-                loadingIndicator.textContent = "Error saving";
+                loadingIndicator.textContent = "Save Error";
                 alert("Error saving: " + err.message);
-            } finally {
-                hideModal();
             }
         };
 
