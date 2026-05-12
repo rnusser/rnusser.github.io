@@ -156,7 +156,7 @@
             bottom: 10px;
             left: 10px;
             font-size: 0.6rem;
-            color: #444;
+            color: var(--text-muted);
             pointer-events: none;
             letter-spacing: 1px;
         }
@@ -186,6 +186,10 @@
         <div class="modal-field">
             <label>Description</label>
             <input type="text" id="event-note" placeholder="Meeting, Holiday, etc." autocomplete="off">
+        </div>
+        <div class="modal-field">
+            <label>Initials (Optional)</label>
+            <input type="text" id="event-initials" maxlength="3" placeholder="ABC" style="width: 60px">
         </div>
         <div class="modal-field">
             <label>Category Color</label>
@@ -238,6 +242,7 @@
         const modal = document.getElementById('event-modal');
         const overlay = document.getElementById('overlay');
         const noteInput = document.getElementById('event-note');
+        const initialsInput = document.getElementById('event-initials');
         const colorPicker = document.getElementById('color-picker');
         const loadingIndicator = document.getElementById('loading-indicator');
         const userInfo = document.getElementById('user-info');
@@ -269,15 +274,6 @@
             };
             colorPicker.appendChild(div);
         });
-
-        function getInitials(name) {
-            if (!name) return "??";
-            const parts = name.trim().split(/\s+/);
-            if (parts.length >= 2) {
-                return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-            }
-            return name.substring(0, 2).toUpperCase();
-        }
 
         function initCalendarUI() {
             container.innerHTML = '';
@@ -351,11 +347,7 @@
         function showModal() {
             if (modalActive) return;
             if (!currentUser && auth) {
-                const dummy = document.createElement('div');
-                dummy.style.cssText = "position:fixed;top:20px;background:red;padding:10px;z-index:9999;color:white;";
-                dummy.innerText = "Please sign in with Google to add entries.";
-                document.body.appendChild(dummy);
-                setTimeout(() => dummy.remove(), 3000);
+                alert("Please sign in with Google to add entries.");
                 clearSelectionPool();
                 return;
             }
@@ -385,11 +377,6 @@
                     await signInWithPopup(auth, provider);
                 } catch (err) {
                     console.error("Auth error", err);
-                    if (err.code === 'auth/unauthorized-domain') {
-                        alert("Error: This domain (rnusser.github.io) is not authorized in your Firebase console. Please add it to 'Authorized Domains' in Authentication settings.");
-                    } else {
-                        alert("Sign in failed: " + err.message);
-                    }
                 }
             }
         };
@@ -399,40 +386,53 @@
             e.stopImmediatePropagation();
             
             const note = noteInput.value.trim();
-            const initials = getInitials(currentUser ? currentUser.displayName : "Guest");
-
-            if (note && selectionPool.size > 0) {
-                const days = Array.from(selectionPool).map(d => ({
-                    m: parseInt(d.dataset.m),
-                    d: parseInt(d.dataset.d)
-                }));
-                
-                if (db && currentUser) {
-                    try {
-                        loadingIndicator.textContent = "Saving...";
-                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), {
-                            note,
-                            initials,
-                            color: selectedColor,
-                            days,
-                            timestamp: Date.now(),
-                            userId: currentUser.uid,
-                            userName: currentUser.displayName
-                        });
-                        loadingIndicator.textContent = "Saved";
-                    } catch (err) { 
-                        console.error("Save error:", err);
-                        loadingIndicator.textContent = "Error saving";
-                    }
-                } else if (!auth) {
-                    allEvents.push({ note, initials, color: selectedColor, days, timestamp: Date.now(), userId: 'local' });
-                    renderEvents();
-                }
-                
-                hideModal();
-            } else if (!note) {
+            let initials = initialsInput.value.trim().toUpperCase();
+            
+            if (!note) {
                 alert("Please enter a description.");
+                return;
             }
+            
+            if (selectionPool.size === 0) {
+                alert("No days selected. Please select days on the calendar first.");
+                hideModal();
+                return;
+            }
+
+            // If user logged in and initials empty, try to get from name
+            if (!initials && currentUser) {
+                initials = currentUser.displayName ? currentUser.displayName.substring(0, 2).toUpperCase() : '??';
+            }
+
+            const days = Array.from(selectionPool).map(d => ({
+                m: parseInt(d.dataset.m),
+                d: parseInt(d.dataset.d)
+            }));
+            
+            if (db && currentUser) {
+                try {
+                    loadingIndicator.textContent = "Saving...";
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), {
+                        note,
+                        initials,
+                        color: selectedColor,
+                        days,
+                        timestamp: Date.now(),
+                        userId: currentUser.uid,
+                        userName: currentUser.displayName
+                    });
+                    loadingIndicator.textContent = "Saved";
+                } catch (err) { 
+                    console.error("Save error:", err);
+                    loadingIndicator.textContent = "Error saving";
+                    alert("Error saving to database: " + err.message);
+                }
+            } else if (!auth) {
+                allEvents.push({ note, initials, color: selectedColor, days, timestamp: Date.now(), userId: 'local' });
+                renderEvents();
+            }
+            
+            hideModal();
         };
 
         if (auth) {
@@ -449,7 +449,7 @@
                     loadingIndicator.textContent = "Read Only Mode";
                     allEvents = [];
                     renderEvents();
-                    startListening(); 
+                    startListening(); // Listen even if not logged in (Public data)
                 }
             });
         }
@@ -475,8 +475,7 @@
                 });
 
                 if (days.length > 0) {
-                    const sorted = [...days].sort((a,b) => a.m - b.m || a.d - b.d);
-                    const firstMonth = sorted[0].m;
+                    const firstMonth = [...days].sort((a,b) => a.m - b.m || a.d - b.d)[0].m;
                     const legendPanel = document.getElementById(`legend-${firstMonth}`);
                     if (legendPanel) {
                         const item = document.createElement('div');
