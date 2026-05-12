@@ -359,9 +359,11 @@
 
         function hideModal() {
             noteInput.blur();
+            initialsInput.blur();
             modal.style.display = 'none';
             overlay.style.display = 'none';
             noteInput.value = "";
+            initialsInput.value = "";
             clearSelectionPool();
             // Delay resetting modalActive slightly to allow click events to settle
             setTimeout(() => { modalActive = false; }, 100);
@@ -382,8 +384,10 @@
         };
 
         document.getElementById('btn-save').onclick = async (e) => {
-            e.preventDefault();
-            e.stopImmediatePropagation();
+            if (e) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+            }
             
             const note = noteInput.value.trim();
             let initials = initialsInput.value.trim().toUpperCase();
@@ -401,7 +405,9 @@
 
             // If user logged in and initials empty, try to get from name
             if (!initials && currentUser) {
-                initials = currentUser.displayName ? currentUser.displayName.substring(0, 2).toUpperCase() : '??';
+                initials = (currentUser.displayName || currentUser.email || "??").substring(0, 2).toUpperCase();
+            } else if (!initials) {
+                initials = "??";
             }
 
             const days = Array.from(selectionPool).map(d => ({
@@ -409,30 +415,32 @@
                 d: parseInt(d.dataset.d)
             }));
             
-            if (db && currentUser) {
-                try {
+            const eventData = {
+                note,
+                initials,
+                color: selectedColor,
+                days,
+                timestamp: Date.now(),
+                userId: currentUser ? currentUser.uid : 'local',
+                userName: currentUser ? (currentUser.displayName || currentUser.email) : 'Guest'
+            };
+
+            try {
+                if (db && currentUser) {
                     loadingIndicator.textContent = "Saving...";
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), {
-                        note,
-                        initials,
-                        color: selectedColor,
-                        days,
-                        timestamp: Date.now(),
-                        userId: currentUser.uid,
-                        userName: currentUser.displayName
-                    });
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), eventData);
                     loadingIndicator.textContent = "Saved";
-                } catch (err) { 
-                    console.error("Save error:", err);
-                    loadingIndicator.textContent = "Error saving";
-                    alert("Error saving to database: " + err.message);
+                } else if (!auth) {
+                    allEvents.push(eventData);
+                    renderEvents();
                 }
-            } else if (!auth) {
-                allEvents.push({ note, initials, color: selectedColor, days, timestamp: Date.now(), userId: 'local' });
-                renderEvents();
+            } catch (err) { 
+                console.error("Save error:", err);
+                loadingIndicator.textContent = "Error saving";
+                alert("Error saving: " + err.message);
+            } finally {
+                hideModal();
             }
-            
-            hideModal();
         };
 
         if (auth) {
