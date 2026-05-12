@@ -178,7 +178,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.0</div>
+    <div class="version-tag">v1.1.2</div>
 
     <div id="overlay"></div>
     <div id="event-modal">
@@ -186,10 +186,6 @@
         <div class="modal-field">
             <label>Description</label>
             <input type="text" id="event-note" placeholder="Meeting, Holiday, etc." autocomplete="off">
-        </div>
-        <div class="modal-field">
-            <label>Initials (Optional)</label>
-            <input type="text" id="event-initials" maxlength="3" placeholder="ABC" style="width: 60px">
         </div>
         <div class="modal-field">
             <label>Category Color</label>
@@ -220,12 +216,25 @@
         let firebaseConfig = {};
         let appId = 'default-app-id';
 
+        // Support for shareable, specific calendars via URL
+        const urlParams = new URLSearchParams(window.location.search);
+        let calendarId = urlParams.get('cid');
+
+        if (!calendarId) {
+            // Generate a random 6-char ID if none exists
+            calendarId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?cid=' + calendarId;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+        }
+        appId = calendarId;
+
         try {
             if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                 firebaseConfig = JSON.parse(__firebase_config);
             } else if (userFirebaseConfig.apiKey) {
                 firebaseConfig = userFirebaseConfig;
             }
+            // Allow override from external __app_id if present
             if (typeof __app_id !== 'undefined' && __app_id) {
                 appId = __app_id;
             }
@@ -242,7 +251,6 @@
         const modal = document.getElementById('event-modal');
         const overlay = document.getElementById('overlay');
         const noteInput = document.getElementById('event-note');
-        const initialsInput = document.getElementById('event-initials');
         const colorPicker = document.getElementById('color-picker');
         const loadingIndicator = document.getElementById('loading-indicator');
         const userInfo = document.getElementById('user-info');
@@ -359,11 +367,9 @@
 
         function hideModal() {
             noteInput.blur();
-            initialsInput.blur();
             modal.style.display = 'none';
             overlay.style.display = 'none';
             noteInput.value = "";
-            initialsInput.value = "";
             clearSelectionPool();
             // Delay resetting modalActive slightly to allow click events to settle
             setTimeout(() => { modalActive = false; }, 100);
@@ -383,6 +389,15 @@
             }
         };
 
+        function getInitials(name) {
+            if (!name) return "??";
+            const parts = name.trim().split(/\s+/);
+            if (parts.length >= 2) {
+                return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+            }
+            return name.substring(0, 2).toUpperCase();
+        }
+
         document.getElementById('btn-save').onclick = async (e) => {
             if (e) {
                 e.preventDefault();
@@ -390,7 +405,6 @@
             }
             
             const note = noteInput.value.trim();
-            const initialsVal = initialsInput.value.trim().toUpperCase();
             
             if (!note) {
                 alert("Please enter a description.");
@@ -403,13 +417,8 @@
                 return;
             }
 
-            // Capture data before hiding modal/clearing inputs
-            let initials = initialsVal;
-            if (!initials && currentUser) {
-                initials = (currentUser.displayName || currentUser.email || "??").substring(0, 2).toUpperCase();
-            } else if (!initials) {
-                initials = "??";
-            }
+            // Hardcode initials from user name
+            const initials = getInitials(currentUser ? currentUser.displayName : "Guest User");
 
             const days = Array.from(selectionPool).map(d => ({
                 m: parseInt(d.dataset.m),
@@ -490,7 +499,7 @@
                     if (legendPanel) {
                         const item = document.createElement('div');
                         item.className = 'legend-item';
-                        item.innerHTML = `<span class="color-dot" style="background:${color}"></span><div class="legend-text"><span class="initials-tag">[${initials}]</span> <span>${note}</span></div>`;
+                        item.innerHTML = `<div class="legend-text"><span class="initials-tag" style="color:${color}">[${initials}]</span> <span>${note}</span></div>`;
                         legendPanel.appendChild(item);
                     }
                 }
