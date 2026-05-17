@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.12</div>
+    <div class="version-tag">v1.1.13</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -267,14 +267,11 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { initializeFirestore, collection, addDoc, onSnapshot, query, doc, getDocs, getDocsFromServer, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeFirestore, collection, addDoc, onSnapshot, query, doc, getDocs, getDocsFromServer, memoryLocalCache } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global Error Handler
         window.onerror = function(msg, url, line, col, error) {
             console.error("GLOBAL ERROR:", msg, "at", url, ":", line);
-            if (msg.includes("400")) {
-                console.error("DETECTED SERVER 400 ERROR - This usually means the Firestore API is disabled or the configuration is incorrect.");
-            }
             return false;
         };
 
@@ -318,13 +315,14 @@
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             
-            // Use initializeFirestore to force long-polling (fixes many 400 Bad Request network issues)
+            // DISABLING PERSISTENCE: This forces the app to talk to the cloud directly
+            // and prevents it from getting stuck in a local "offline-first" cache loop.
             db = initializeFirestore(app, {
-                experimentalForceLongPolling: true,
-                useFetchStreams: false
+                localCache: memoryLocalCache(),
+                experimentalForceLongPolling: true
             });
             
-            console.log("Firebase/Firestore Initialized (Long-Polling Mode)");
+            console.log("Firebase/Firestore Initialized (Persistence Disabled)");
         } catch (e) {
             console.error("FIREBASE INIT ERROR:", e);
         }
