@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.6</div>
+    <div class="version-tag">v1.1.7</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -269,6 +269,21 @@
         import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // Global Error Handler for silent failures
+        window.onerror = function(msg, url, line, col, error) {
+            console.error("GLOBAL ERROR:", msg, "at", url, ":", line);
+            return false;
+        };
+
+        function getInitials(name) {
+            if (!name) return "??";
+            const parts = name.trim().split(/\s+/);
+            if (parts.length >= 2) {
+                return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+            }
+            return name.substring(0, 2).toUpperCase();
+        }
+
         // --- PASTE YOUR FIREBASE CONFIG HERE ---
         const userFirebaseConfig = {
             apiKey: "AIzaSyDiK4IE76BtbynIxtfd2jdmDG73an66znc",
@@ -281,21 +296,20 @@
         // ----------------------------------------
 
         let firebaseConfig = {};
-        let appId = 'default-app-id';
+        let currentCid = 'default-cid';
 
         // Support for shareable, specific calendars via URL
         const urlParams = new URLSearchParams(window.location.search);
-        let calendarId = urlParams.get('cid');
+        let calendarIdFromUrl = urlParams.get('cid');
 
-        if (!calendarId) {
+        if (!calendarIdFromUrl) {
             // Generate a random 6-char ID if none exists
-            calendarId = Math.random().toString(36).substring(2, 8).toUpperCase();
-            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?cid=' + calendarId;
+            calendarIdFromUrl = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?cid=' + calendarIdFromUrl;
             window.history.pushState({ path: newUrl }, '', newUrl);
         }
         
-        // CID ALWAYS takes precedence for the sharing feature
-        appId = calendarId;
+        currentCid = calendarIdFromUrl;
 
         try {
             if (typeof __firebase_config !== 'undefined' && __firebase_config) {
@@ -303,19 +317,24 @@
             } else if (userFirebaseConfig.apiKey) {
                 firebaseConfig = userFirebaseConfig;
             }
-            // Only allow __app_id override if CID was not found (unlikely given logic above)
-            if (!calendarId && typeof __app_id !== 'undefined' && __app_id) {
-                appId = __app_id;
+            // Allow override from external __app_id only if CID was not found
+            if (!urlParams.get('cid') && typeof __app_id !== 'undefined' && __app_id) {
+                currentCid = __app_id;
             }
-        } catch (e) { console.log("Standard Mode"); }
+        } catch (e) { console.warn("Standard Mode"); }
 
-        console.log("Active Calendar ID (appId):", appId);
+        console.log("INITIALIZATION - CID:", currentCid, "Project:", firebaseConfig.projectId);
 
         let db = null, auth = null;
         if (firebaseConfig && firebaseConfig.apiKey) {
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                console.log("Firebase/Firestore Initialized Successfully");
+            } catch (e) {
+                console.error("FIREBASE INIT ERROR:", e);
+            }
         }
 
         const container = document.getElementById('calendar-container');
@@ -359,7 +378,7 @@
             recentList.innerHTML = '';
             recents.forEach(cid => {
                 const item = document.createElement('div');
-                item.className = 'recent-item' + (cid === appId ? ' active' : '');
+                item.className = 'recent-item' + (cid === currentCid ? ' active' : '');
                 item.textContent = cid;
                 item.onclick = () => {
                     const action = prompt(`Calendar: ${cid}\nType "open" to switch, or "delete" to remove from list:`, 'open');
@@ -374,7 +393,7 @@
             });
         }
 
-        if (calendarId) saveRecentCalendar(calendarId);
+        if (calendarIdFromUrl) saveRecentCalendar(calendarIdFromUrl);
         renderSidebar();
 
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
