@@ -160,6 +160,68 @@
             pointer-events: none;
             letter-spacing: 1px;
         }
+
+        /* Sidebar Styles */
+        #sidebar-recent {
+            position: fixed;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 180px;
+            background: #111;
+            border-left: 1px solid var(--border-color);
+            padding: 20px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .sidebar-title {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            font-weight: bold;
+            border-bottom: 1px solid #222;
+            padding-bottom: 8px;
+            margin-bottom: 5px;
+        }
+
+        .recent-item {
+            font-size: 0.75rem;
+            padding: 8px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #ccc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .recent-item:hover {
+            background: #222;
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        .recent-item.active {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: #151515;
+        }
+
+        /* Adjust main body padding for sidebar */
+        body {
+            padding-right: 200px;
+        }
+
+        @media (max-width: 1400px) {
+            #sidebar-recent { width: 140px; }
+            body { padding-right: 160px; }
+        }
     </style>
 </head>
 <body>
@@ -178,7 +240,12 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.2</div>
+    <div class="version-tag">v1.1.3</div>
+
+    <aside id="sidebar-recent">
+        <div class="sidebar-title">RECENT CALENDARS</div>
+        <div id="recent-list"></div>
+    </aside>
 
     <div id="overlay"></div>
     <div id="event-modal">
@@ -257,7 +324,55 @@
         const btnLogin = document.getElementById('btn-login');
         const btnFilterMe = document.getElementById('btn-filter-me');
         const btnShare = document.getElementById('btn-share');
+        const recentList = document.getElementById('recent-list');
         
+        // --- Sidebar & Persistence Logic ---
+        function getRecentCalendars() {
+            try {
+                return JSON.parse(localStorage.getItem('recent_cids') || '[]');
+            } catch (e) { return []; }
+        }
+
+        function saveRecentCalendar(cid) {
+            let recents = getRecentCalendars();
+            if (!recents.includes(cid)) {
+                recents.unshift(cid);
+                recents = recents.slice(0, 15); // Keep last 15
+                localStorage.setItem('recent_cids', JSON.stringify(recents));
+            }
+            renderSidebar();
+        }
+
+        function removeRecentCalendar(cid) {
+            let recents = getRecentCalendars();
+            recents = recents.filter(id => id !== cid);
+            localStorage.setItem('recent_cids', JSON.stringify(recents));
+            renderSidebar();
+        }
+
+        function renderSidebar() {
+            const recents = getRecentCalendars();
+            recentList.innerHTML = '';
+            recents.forEach(cid => {
+                const item = document.createElement('div');
+                item.className = 'recent-item' + (cid === appId ? ' active' : '');
+                item.textContent = cid;
+                item.onclick = () => {
+                    const action = prompt(`Calendar: ${cid}\nType "open" to switch, or "delete" to remove from list:`, 'open');
+                    if (action === 'open') {
+                        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?cid=' + cid;
+                        window.location.href = newUrl;
+                    } else if (action === 'delete') {
+                        removeRecentCalendar(cid);
+                    }
+                };
+                recentList.appendChild(item);
+            });
+        }
+
+        if (calendarId) saveRecentCalendar(calendarId);
+        renderSidebar();
+
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const weekdays = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
         const presetColors = ['#ff5555', '#50fa7b', '#8be9fd', '#bd93f9', '#ff79c6', '#f1fa8c', '#ffb86c', '#ff6e6e', '#ffffff'];
