@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.14</div>
+    <div class="version-tag">v1.1.15</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -265,13 +265,14 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { initializeFirestore, collection, addDoc, onSnapshot, query, doc, getDocs, getDocsFromServer, memoryLocalCache } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // DOWNGRADE SDK TO STABLE 10.13.0
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, doc, getDocs, getDocsFromServer } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
         // Global Error Handler
         window.onerror = function(msg, url, line, col, error) {
-            console.error("GLOBAL ERROR:", msg, "at", url, ":", line);
+            console.error("GLOBAL ERROR:", msg);
             return false;
         };
 
@@ -284,7 +285,7 @@
             return name.substring(0, 2).toUpperCase();
         }
 
-        // --- PASTE YOUR FIREBASE CONFIG HERE ---
+        // --- FIREBASE CONFIG ---
         const userFirebaseConfig = {
             apiKey: "AIzaSyDiK4IE76BtbynIxtfd2jdmDG73an66znc",
             authDomain: "nusscalendar-a4862.firebaseapp.com",
@@ -293,7 +294,6 @@
             messagingSenderId: "1062471022470",
             appId: "1:1062471022470:web:279d68596c64790ba09e07"
         };
-        // ----------------------------------------
 
         let firebaseConfig = userFirebaseConfig;
         let currentCid = 'default-cid';
@@ -308,21 +308,14 @@
         }
         
         currentCid = calendarIdFromUrl;
-        console.log("INITIALIZATION - CID:", currentCid, "Project:", firebaseConfig.projectId);
+        console.log("INITIALIZATION v1.1.15 - CID:", currentCid, "Project:", firebaseConfig.projectId);
 
         let db = null, auth = null;
         try {
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
-            
-            // DISABLING PERSISTENCE: This forces the app to talk to the cloud directly
-            // and prevents it from getting stuck in a local "offline-first" cache loop.
-            db = initializeFirestore(app, {
-                localCache: memoryLocalCache(),
-                experimentalForceLongPolling: true
-            });
-            
-            console.log("Firebase/Firestore Initialized (Persistence Disabled)");
+            db = getFirestore(app); // Revert to standard getFirestore (SDK 10.x handles networking automatically)
+            console.log("Firebase/Firestore Initialized (SDK 10.13.0)");
         } catch (e) {
             console.error("FIREBASE INIT ERROR:", e);
         }
@@ -339,7 +332,7 @@
         const btnShare = document.getElementById('btn-share');
         const recentList = document.getElementById('recent-list');
         
-        // Add a manual sync button to header dynamically
+        // Manual Sync
         const syncBtn = document.createElement('button');
         syncBtn.id = 'btn-sync';
         syncBtn.className = 'tool-btn';
@@ -347,7 +340,7 @@
         syncBtn.onclick = () => { console.log("MANUAL SYNC TRIGGERED"); startListening(); };
         document.querySelector('.controls').appendChild(syncBtn);
 
-        // Add a cloud test button
+        // Simple Connection Test
         const testBtn = document.createElement('button');
         testBtn.id = 'btn-test-cloud';
         testBtn.className = 'tool-btn';
@@ -362,20 +355,19 @@
                     time: Date.now(), 
                     user: currentUser.email,
                     cid: currentCid 
-                }), 5000);
-                console.log("TEST SUCCESS! Cloud write confirmed:", docRef.id);
-                alert("Cloud Connection Verified!\nWrite successful.");
+                }), 8000);
+                console.log("TEST SUCCESS! ID:", docRef.id);
+                alert("Cloud Connection Verified!");
             } catch (e) {
                 console.error("TEST FAILED:", e);
-                alert("Cloud Test Failed: " + e.message);
+                alert("Cloud Test Failed: " + e.message + "\n(If 400, ensure Firestore API is enabled in Console)");
             }
         };
         document.querySelector('.controls').appendChild(testBtn);
 
-        // Promise Timeout Helper
         function withTimeout(promise, ms) {
             return new Promise((resolve, reject) => {
-                const timer = setTimeout(() => reject(new Error("Operation timed out (Server unreachable)")), ms);
+                const timer = setTimeout(() => reject(new Error("Timeout (Server unreachable)")), ms);
                 promise.then(res => { clearTimeout(timer); resolve(res); })
                        .catch(err => { clearTimeout(timer); reject(err); });
             });
@@ -555,19 +547,13 @@
         };
 
         document.getElementById('btn-save').onclick = async (e) => {
-            if (e) {
-                e.preventDefault();
-                e.stopImmediatePropagation();
-            }
+            if (e) { e.preventDefault(); e.stopImmediatePropagation(); }
             const note = noteInput.value.trim();
-            if (!note) { alert("Please enter a description."); return; }
+            if (!note) { alert("Description required."); return; }
             if (selectionPool.size === 0) { alert("No days selected."); hideModal(); return; }
 
             const initials = getInitials(currentUser ? currentUser.displayName : "Guest User");
-            const days = Array.from(selectionPool).map(d => ({
-                m: parseInt(d.dataset.m),
-                d: parseInt(d.dataset.d)
-            }));
+            const days = Array.from(selectionPool).map(d => ({ m: parseInt(d.dataset.m), d: parseInt(d.dataset.d) }));
             
             const eventData = {
                 note: note,
@@ -575,49 +561,41 @@
                 color: selectedColor,
                 days: days,
                 timestamp: Date.now(),
-                userId: currentUser ? currentUser.uid : 'local',
-                userName: currentUser ? (currentUser.displayName || currentUser.email) : 'Guest'
+                userId: currentUser ? currentUser.uid : 'local'
             };
 
-            console.log("SAVE ATTEMPT - CID:", currentCid, "Data:", JSON.stringify(eventData));
+            console.log("SAVE ATTEMPT:", eventData);
             hideModal();
 
             try {
                 if (db && currentUser) {
-                    loadingIndicator.textContent = "Saving to cloud...";
+                    loadingIndicator.textContent = "Syncing...";
                     const colRef = collection(db, 'artifacts', currentCid, 'public', 'data', 'events');
-                    console.log("Collection path:", colRef.path);
-                    
-                    // Use timeout to prevent hanging
-                    const docRef = await withTimeout(addDoc(colRef, eventData), 10000);
-                    
-                    console.log("SAVE SUCCESS - Doc ID:", docRef.id);
-                    loadingIndicator.textContent = "Cloud Active";
+                    await withTimeout(addDoc(colRef, eventData), 8000);
+                    console.log("SAVE SUCCESS");
+                    loadingIndicator.textContent = "Online";
                 } else {
-                    console.warn("LOCAL SAVE - No DB or User", {db: !!db, user: !!currentUser});
                     allEvents.push(eventData);
                     renderEvents();
                 }
             } catch (err) { 
-                console.error("FIREBASE SAVE ERROR:", err);
-                loadingIndicator.textContent = "Save Error";
-                alert("Firestore Error: " + err.message);
+                console.error("SAVE FAILED:", err);
+                loadingIndicator.textContent = "Offline/Error";
+                alert("Firestore Write Failed: " + err.message);
             }
         };
 
         if (auth) {
             onAuthStateChanged(auth, (user) => {
-                console.log("Auth Changed:", user ? user.email : "Logged Out");
+                console.log("Auth Status:", user ? user.email : "Out");
                 currentUser = user;
                 if (user) {
-                    userInfo.textContent = `Signed in as: ${user.displayName || user.email}`;
+                    userInfo.textContent = `User: ${user.displayName || user.email}`;
                     btnLogin.textContent = "SIGN OUT";
-                    loadingIndicator.textContent = "Cloud Active";
                     startListening();
                 } else {
-                    userInfo.textContent = "Not signed in";
-                    btnLogin.textContent = "SIGN IN WITH GOOGLE";
-                    loadingIndicator.textContent = "Read Only Mode";
+                    userInfo.textContent = "Guest Mode";
+                    btnLogin.textContent = "SIGN IN";
                     allEvents = [];
                     renderEvents();
                     startListening();
@@ -626,7 +604,6 @@
         }
 
         function renderEvents() {
-            console.log("Rendering", allEvents.length, "events");
             document.querySelectorAll('.stripe-container').forEach(c => c.innerHTML = '');
             document.querySelectorAll('.legend-panel').forEach(l => l.innerHTML = '');
 
@@ -663,28 +640,17 @@
 
         let unsubscribeEvents = null;
         async function startListening() {
-            if (!db) {
-                console.error("StartListening failed: db is null");
-                return;
-            }
-            if (unsubscribeEvents) { 
-                console.log("Cleaning up old listener");
-                unsubscribeEvents(); 
-                unsubscribeEvents = null; 
-            }
+            if (!db) return;
+            if (unsubscribeEvents) { unsubscribeEvents(); unsubscribeEvents = null; }
             const colRef = collection(db, 'artifacts', currentCid, 'public', 'data', 'events');
-            console.log("Initializing listener on:", colRef.path);
-
-            // FORCE SERVER FETCH to see what's actually persisted
+            
             try {
                 const querySnapshot = await getDocsFromServer(colRef);
-                console.log("SERVER-SIDE VERIFICATION: found", querySnapshot.size, "actual documents on Google servers.");
-            } catch (e) {
-                console.error("SERVER-SIDE FETCH FAILED (Check Permissions/Network):", e);
-            }
+                console.log("Server verification:", querySnapshot.size, "docs found.");
+            } catch (e) { console.warn("Fetch failed:", e.message); }
 
             unsubscribeEvents = onSnapshot(colRef, (snapshot) => {
-                console.log("SNAPSHOT UPDATE: received", snapshot.docs.length, "docs. PendingWrites:", snapshot.metadata.hasPendingWrites, "FromCache:", snapshot.metadata.fromCache);
+                console.log("Snapshot:", snapshot.size, "docs. Syncing:", snapshot.metadata.hasPendingWrites);
                 allEvents = snapshot.docs.map(doc => ({
                     id: doc.id, 
                     _pending: doc.metadata.hasPendingWrites,
@@ -692,27 +658,18 @@
                 }));
                 renderEvents();
             }, (err) => { 
-                console.error("FIRESTORE LISTENER ERROR:", err);
+                console.error("LISTENER ERROR:", err);
                 loadingIndicator.textContent = "Sync Error"; 
             });
         }
 
-        document.getElementById('btn-cancel').onclick = (e) => {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            hideModal();
-        };
-        
+        document.getElementById('btn-cancel').onclick = () => hideModal();
         btnFilterMe.onclick = () => { filterMyEvents = !filterMyEvents; btnFilterMe.classList.toggle('active', filterMyEvents); renderEvents(); };
         btnShare.onclick = () => { 
-            const dummy = document.createElement('input'); 
-            document.body.appendChild(dummy); 
-            dummy.value = window.location.href; 
-            dummy.select(); 
-            document.execCommand('copy'); 
+            const dummy = document.createElement('input'); document.body.appendChild(dummy); 
+            dummy.value = window.location.href; dummy.select(); document.execCommand('copy'); 
             document.body.removeChild(dummy);
-            const toast = document.getElementById('toast');
-            toast.style.display = 'block';
+            const toast = document.getElementById('toast'); toast.style.display = 'block';
             setTimeout(() => toast.style.display = 'none', 2000);
         };
 
