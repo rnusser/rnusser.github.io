@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.8</div>
+    <div class="version-tag">v1.1.9</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -530,23 +530,26 @@
                 userName: currentUser ? (currentUser.displayName || currentUser.email) : 'Guest'
             };
 
+            console.log("SAVE ATTEMPT - CID:", currentCid, "Data:", JSON.stringify(eventData));
             hideModal();
 
             try {
                 if (db && currentUser) {
                     loadingIndicator.textContent = "Saving to cloud...";
                     const colRef = collection(db, 'artifacts', currentCid, 'public', 'data', 'events');
-                    await addDoc(colRef, eventData);
-                    console.log("Save Success");
+                    console.log("Collection path:", colRef.path);
+                    const docRef = await addDoc(colRef, eventData);
+                    console.log("SAVE SUCCESS - Doc ID:", docRef.id);
                     loadingIndicator.textContent = "Cloud Active";
                 } else {
+                    console.warn("LOCAL SAVE - No DB or User", {db: !!db, user: !!currentUser});
                     allEvents.push(eventData);
                     renderEvents();
                 }
             } catch (err) { 
-                console.error("Save error:", err);
+                console.error("FIREBASE SAVE ERROR:", err);
                 loadingIndicator.textContent = "Save Error";
-                alert("Error saving: " + err.message);
+                alert("Cloud Save Error: " + err.message + "\n(Check Firestore Security Rules)");
             }
         };
 
@@ -571,6 +574,7 @@
         }
 
         function renderEvents() {
+            console.log("Rendering", allEvents.length, "events");
             document.querySelectorAll('.stripe-container').forEach(c => c.innerHTML = '');
             document.querySelectorAll('.legend-panel').forEach(l => l.innerHTML = '');
 
@@ -606,16 +610,27 @@
 
         let unsubscribeEvents = null;
         function startListening() {
-            if (!db) return;
-            if (unsubscribeEvents) { unsubscribeEvents(); unsubscribeEvents = null; }
+            if (!db) {
+                console.error("StartListening failed: db is null");
+                return;
+            }
+            if (unsubscribeEvents) { 
+                console.log("Cleaning up old listener");
+                unsubscribeEvents(); 
+                unsubscribeEvents = null; 
+            }
             const colRef = collection(db, 'artifacts', currentCid, 'public', 'data', 'events');
-            console.log("Listening on:", colRef.path);
+            console.log("Initializing listener on:", colRef.path);
             unsubscribeEvents = onSnapshot(colRef, (snapshot) => {
-                allEvents = snapshot.docs.map(doc => doc.data());
+                console.log("SNAPSHOT UPDATE: received", snapshot.docs.length, "documents");
+                allEvents = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
                 renderEvents();
             }, (err) => { 
-                console.error("Listener error:", err);
+                console.error("FIRESTORE LISTENER ERROR:", err);
                 loadingIndicator.textContent = "Sync Error"; 
+                if (err.code === 'permission-denied') {
+                    console.error("Access Denied: Check Firestore Security Rules for 'read' permission.");
+                }
             });
         }
 
