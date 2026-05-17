@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.13</div>
+    <div class="version-tag">v1.1.14</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -343,9 +343,43 @@
         const syncBtn = document.createElement('button');
         syncBtn.id = 'btn-sync';
         syncBtn.className = 'tool-btn';
-        syncBtn.textContent = 'RE-SYNC DATA';
+        syncBtn.textContent = 'RE-SYNC';
         syncBtn.onclick = () => { console.log("MANUAL SYNC TRIGGERED"); startListening(); };
         document.querySelector('.controls').appendChild(syncBtn);
+
+        // Add a cloud test button
+        const testBtn = document.createElement('button');
+        testBtn.id = 'btn-test-cloud';
+        testBtn.className = 'tool-btn';
+        testBtn.textContent = 'TEST CLOUD';
+        testBtn.style.borderColor = '#ff79c6';
+        testBtn.onclick = async () => {
+            if (!db || !currentUser) { alert("Sign in first!"); return; }
+            console.log("--- STARTING CLOUD TEST ---");
+            const testRef = collection(db, 'test_connection');
+            try {
+                const docRef = await withTimeout(addDoc(testRef, { 
+                    time: Date.now(), 
+                    user: currentUser.email,
+                    cid: currentCid 
+                }), 5000);
+                console.log("TEST SUCCESS! Cloud write confirmed:", docRef.id);
+                alert("Cloud Connection Verified!\nWrite successful.");
+            } catch (e) {
+                console.error("TEST FAILED:", e);
+                alert("Cloud Test Failed: " + e.message);
+            }
+        };
+        document.querySelector('.controls').appendChild(testBtn);
+
+        // Promise Timeout Helper
+        function withTimeout(promise, ms) {
+            return new Promise((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error("Operation timed out (Server unreachable)")), ms);
+                promise.then(res => { clearTimeout(timer); resolve(res); })
+                       .catch(err => { clearTimeout(timer); reject(err); });
+            });
+        }
 
         // --- Sidebar & Persistence ---
         function getRecentCalendars() {
@@ -553,7 +587,10 @@
                     loadingIndicator.textContent = "Saving to cloud...";
                     const colRef = collection(db, 'artifacts', currentCid, 'public', 'data', 'events');
                     console.log("Collection path:", colRef.path);
-                    const docRef = await addDoc(colRef, eventData);
+                    
+                    // Use timeout to prevent hanging
+                    const docRef = await withTimeout(addDoc(colRef, eventData), 10000);
+                    
                     console.log("SAVE SUCCESS - Doc ID:", docRef.id);
                     loadingIndicator.textContent = "Cloud Active";
                 } else {
@@ -564,7 +601,7 @@
             } catch (err) { 
                 console.error("FIREBASE SAVE ERROR:", err);
                 loadingIndicator.textContent = "Save Error";
-                alert("Cloud Save Error: " + err.message + "\n(Check Firestore Security Rules)");
+                alert("Firestore Error: " + err.message);
             }
         };
 
