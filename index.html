@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.11</div>
+    <div class="version-tag">v1.1.12</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -267,11 +267,14 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, doc, getDocs, getDocsFromServer } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeFirestore, collection, addDoc, onSnapshot, query, doc, getDocs, getDocsFromServer, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global Error Handler
         window.onerror = function(msg, url, line, col, error) {
             console.error("GLOBAL ERROR:", msg, "at", url, ":", line);
+            if (msg.includes("400")) {
+                console.error("DETECTED SERVER 400 ERROR - This usually means the Firestore API is disabled or the configuration is incorrect.");
+            }
             return false;
         };
 
@@ -308,14 +311,20 @@
         }
         
         currentCid = calendarIdFromUrl;
-        console.log("INITIALIZATION - CID:", currentCid);
+        console.log("INITIALIZATION - CID:", currentCid, "Project:", firebaseConfig.projectId);
 
         let db = null, auth = null;
         try {
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
-            db = getFirestore(app);
-            console.log("Firebase/Firestore Initialized");
+            
+            // Use initializeFirestore to force long-polling (fixes many 400 Bad Request network issues)
+            db = initializeFirestore(app, {
+                experimentalForceLongPolling: true,
+                useFetchStreams: false
+            });
+            
+            console.log("Firebase/Firestore Initialized (Long-Polling Mode)");
         } catch (e) {
             console.error("FIREBASE INIT ERROR:", e);
         }
