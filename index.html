@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.9</div>
+    <div class="version-tag">v1.1.10</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -267,7 +267,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, doc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global Error Handler
         window.onerror = function(msg, url, line, col, error) {
@@ -332,6 +332,14 @@
         const btnShare = document.getElementById('btn-share');
         const recentList = document.getElementById('recent-list');
         
+        // Add a manual sync button to header dynamically
+        const syncBtn = document.createElement('button');
+        syncBtn.id = 'btn-sync';
+        syncBtn.className = 'tool-btn';
+        syncBtn.textContent = 'RE-SYNC DATA';
+        syncBtn.onclick = () => { console.log("MANUAL SYNC TRIGGERED"); startListening(); };
+        document.querySelector('.controls').appendChild(syncBtn);
+
         // --- Sidebar & Persistence ---
         function getRecentCalendars() {
             try { return JSON.parse(localStorage.getItem('recent_cids') || '[]'); } catch (e) { return []; }
@@ -609,7 +617,7 @@
         }
 
         let unsubscribeEvents = null;
-        function startListening() {
+        async function startListening() {
             if (!db) {
                 console.error("StartListening failed: db is null");
                 return;
@@ -621,8 +629,17 @@
             }
             const colRef = collection(db, 'artifacts', currentCid, 'public', 'data', 'events');
             console.log("Initializing listener on:", colRef.path);
+
+            // One-time manual fetch to verify current state
+            try {
+                const querySnapshot = await getDocs(colRef);
+                console.log("ONE-TIME FETCH VERIFICATION: found", querySnapshot.size, "documents");
+            } catch (e) {
+                console.error("ONE-TIME FETCH FAILED:", e);
+            }
+
             unsubscribeEvents = onSnapshot(colRef, (snapshot) => {
-                console.log("SNAPSHOT UPDATE: received", snapshot.docs.length, "documents");
+                console.log("SNAPSHOT UPDATE: received", snapshot.docs.length, "documents. FromCache:", snapshot.metadata.fromCache);
                 allEvents = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
                 renderEvents();
             }, (err) => { 
