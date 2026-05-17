@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.4</div>
+    <div class="version-tag">v1.1.5</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -554,15 +554,22 @@
                 userName: currentUser ? (currentUser.displayName || currentUser.email) : 'Guest'
             };
 
+            console.log("Saving Event:", eventData);
+            console.log("App ID:", appId);
+
             // IMMEDIATELY HIDE MODAL
             hideModal();
 
             try {
                 if (db && currentUser) {
                     loadingIndicator.textContent = "Saving to cloud...";
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), eventData);
+                    const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'events');
+                    console.log("Firestore Collection Path:", colRef.path);
+                    await addDoc(colRef, eventData);
+                    console.log("Save Successful");
                     loadingIndicator.textContent = "Cloud Active";
-                } else if (!auth) {
+                } else {
+                    console.warn("Saving to Local State ONLY. DB:", !!db, "User:", !!currentUser);
                     allEvents.push(eventData);
                     renderEvents();
                 }
@@ -575,6 +582,7 @@
 
         if (auth) {
             onAuthStateChanged(auth, (user) => {
+                console.log("Auth Status Changed:", user ? user.email : "Logged Out");
                 currentUser = user;
                 if (user) {
                     userInfo.textContent = `Signed in as: ${user.displayName || user.email}`;
@@ -593,6 +601,7 @@
         }
 
         function renderEvents() {
+            console.log("Rendering Events. Total:", allEvents.length);
             document.querySelectorAll('.stripe-container').forEach(c => c.innerHTML = '');
             document.querySelectorAll('.legend-panel').forEach(l => l.innerHTML = '');
 
@@ -613,7 +622,8 @@
                 });
 
                 if (days.length > 0) {
-                    const firstMonth = [...days].sort((a,b) => a.m - b.m || a.d - b.d)[0].m;
+                    const sortedDays = [...days].sort((a,b) => a.m - b.m || a.d - b.d);
+                    const firstMonth = sortedDays[0].m;
                     const legendPanel = document.getElementById(`legend-${firstMonth}`);
                     if (legendPanel) {
                         const item = document.createElement('div');
@@ -627,14 +637,20 @@
 
         let unsubscribeEvents = null;
         function startListening() {
-            if (!db) return;
+            if (!db) {
+                console.warn("DB not ready, skipping listener");
+                return;
+            }
             if (unsubscribeEvents) {
+                console.log("Closing existing listener");
                 unsubscribeEvents(); // Stop previous listener
                 unsubscribeEvents = null;
             }
 
-            const q = collection(db, 'artifacts', appId, 'public', 'data', 'events');
-            unsubscribeEvents = onSnapshot(q, (snapshot) => {
+            const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'events');
+            console.log("Starting listener on:", colRef.path);
+            unsubscribeEvents = onSnapshot(colRef, (snapshot) => {
+                console.log("Snapshot Update:", snapshot.size, "documents");
                 allEvents = snapshot.docs.map(doc => doc.data());
                 renderEvents();
             }, (err) => { 
