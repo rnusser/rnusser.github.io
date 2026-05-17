@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.10</div>
+    <div class="version-tag">v1.1.11</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -267,7 +267,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, doc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, doc, getDocs, getDocsFromServer } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global Error Handler
         window.onerror = function(msg, url, line, col, error) {
@@ -591,7 +591,7 @@
                 : allEvents;
 
             visibleEvents.forEach(data => {
-                const { days, color, note, initials } = data;
+                const { days, color, note, initials, _pending } = data;
                 days.forEach(dayInfo => {
                     const dayEl = document.getElementById(`day-${dayInfo.m}-${dayInfo.d}`);
                     if (dayEl) {
@@ -609,7 +609,8 @@
                     if (legendPanel) {
                         const item = document.createElement('div');
                         item.className = 'legend-item';
-                        item.innerHTML = `<div class="legend-text"><span class="initials-tag" style="color:${color}">[${initials}]</span> <span>${note}</span></div>`;
+                        const syncIcon = _pending ? ' (⌛ Syncing...)' : '';
+                        item.innerHTML = `<div class="legend-text"><span class="initials-tag" style="color:${color}">[${initials}]</span> <span>${note}${syncIcon}</span></div>`;
                         legendPanel.appendChild(item);
                     }
                 }
@@ -630,24 +631,25 @@
             const colRef = collection(db, 'artifacts', currentCid, 'public', 'data', 'events');
             console.log("Initializing listener on:", colRef.path);
 
-            // One-time manual fetch to verify current state
+            // FORCE SERVER FETCH to see what's actually persisted
             try {
-                const querySnapshot = await getDocs(colRef);
-                console.log("ONE-TIME FETCH VERIFICATION: found", querySnapshot.size, "documents");
+                const querySnapshot = await getDocsFromServer(colRef);
+                console.log("SERVER-SIDE VERIFICATION: found", querySnapshot.size, "actual documents on Google servers.");
             } catch (e) {
-                console.error("ONE-TIME FETCH FAILED:", e);
+                console.error("SERVER-SIDE FETCH FAILED (Check Permissions/Network):", e);
             }
 
             unsubscribeEvents = onSnapshot(colRef, (snapshot) => {
-                console.log("SNAPSHOT UPDATE: received", snapshot.docs.length, "documents. FromCache:", snapshot.metadata.fromCache);
-                allEvents = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                console.log("SNAPSHOT UPDATE: received", snapshot.docs.length, "docs. PendingWrites:", snapshot.metadata.hasPendingWrites, "FromCache:", snapshot.metadata.fromCache);
+                allEvents = snapshot.docs.map(doc => ({
+                    id: doc.id, 
+                    _pending: doc.metadata.hasPendingWrites,
+                    ...doc.data()
+                }));
                 renderEvents();
             }, (err) => { 
                 console.error("FIRESTORE LISTENER ERROR:", err);
                 loadingIndicator.textContent = "Sync Error"; 
-                if (err.code === 'permission-denied') {
-                    console.error("Access Denied: Check Firestore Security Rules for 'read' permission.");
-                }
             });
         }
 
