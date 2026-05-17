@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.7</div>
+    <div class="version-tag">v1.1.8</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -269,7 +269,7 @@
         import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global Error Handler for silent failures
+        // Global Error Handler
         window.onerror = function(msg, url, line, col, error) {
             console.error("GLOBAL ERROR:", msg, "at", url, ":", line);
             return false;
@@ -295,46 +295,29 @@
         };
         // ----------------------------------------
 
-        let firebaseConfig = {};
+        let firebaseConfig = userFirebaseConfig;
         let currentCid = 'default-cid';
 
-        // Support for shareable, specific calendars via URL
         const urlParams = new URLSearchParams(window.location.search);
         let calendarIdFromUrl = urlParams.get('cid');
 
         if (!calendarIdFromUrl) {
-            // Generate a random 6-char ID if none exists
             calendarIdFromUrl = Math.random().toString(36).substring(2, 8).toUpperCase();
             const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?cid=' + calendarIdFromUrl;
             window.history.pushState({ path: newUrl }, '', newUrl);
         }
         
         currentCid = calendarIdFromUrl;
-
-        try {
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                firebaseConfig = JSON.parse(__firebase_config);
-            } else if (userFirebaseConfig.apiKey) {
-                firebaseConfig = userFirebaseConfig;
-            }
-            // Allow override from external __app_id only if CID was not found
-            if (!urlParams.get('cid') && typeof __app_id !== 'undefined' && __app_id) {
-                currentCid = __app_id;
-            }
-        } catch (e) { console.warn("Standard Mode"); }
-
-        console.log("INITIALIZATION - CID:", currentCid, "Project:", firebaseConfig.projectId);
+        console.log("INITIALIZATION - CID:", currentCid);
 
         let db = null, auth = null;
-        if (firebaseConfig && firebaseConfig.apiKey) {
-            try {
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                console.log("Firebase/Firestore Initialized Successfully");
-            } catch (e) {
-                console.error("FIREBASE INIT ERROR:", e);
-            }
+        try {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            console.log("Firebase/Firestore Initialized");
+        } catch (e) {
+            console.error("FIREBASE INIT ERROR:", e);
         }
 
         const container = document.getElementById('calendar-container');
@@ -349,26 +332,23 @@
         const btnShare = document.getElementById('btn-share');
         const recentList = document.getElementById('recent-list');
         
-        // --- Sidebar & Persistence Logic ---
+        // --- Sidebar & Persistence ---
         function getRecentCalendars() {
-            try {
-                return JSON.parse(localStorage.getItem('recent_cids') || '[]');
-            } catch (e) { return []; }
+            try { return JSON.parse(localStorage.getItem('recent_cids') || '[]'); } catch (e) { return []; }
         }
 
         function saveRecentCalendar(cid) {
             let recents = getRecentCalendars();
             if (!recents.includes(cid)) {
                 recents.unshift(cid);
-                recents = recents.slice(0, 15); // Keep last 15
+                recents = recents.slice(0, 15);
                 localStorage.setItem('recent_cids', JSON.stringify(recents));
             }
             renderSidebar();
         }
 
         function removeRecentCalendar(cid) {
-            let recents = getRecentCalendars();
-            recents = recents.filter(id => id !== cid);
+            let recents = getRecentCalendars().filter(id => id !== cid);
             localStorage.setItem('recent_cids', JSON.stringify(recents));
             renderSidebar();
         }
@@ -381,10 +361,9 @@
                 item.className = 'recent-item' + (cid === currentCid ? ' active' : '');
                 item.textContent = cid;
                 item.onclick = () => {
-                    const action = prompt(`Calendar: ${cid}\nType "open" to switch, or "delete" to remove from list:`, 'open');
+                    const action = prompt(`Calendar: ${cid}\nType "open" or "delete":`, 'open');
                     if (action === 'open') {
-                        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?cid=' + cid;
-                        window.location.href = newUrl;
+                        window.location.href = window.location.pathname + '?cid=' + cid;
                     } else if (action === 'delete') {
                         removeRecentCalendar(cid);
                     }
@@ -393,8 +372,7 @@
             });
         }
 
-        if (calendarIdFromUrl) saveRecentCalendar(calendarIdFromUrl);
-        renderSidebar();
+        saveRecentCalendar(currentCid);
 
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const weekdays = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -406,7 +384,7 @@
         let currentUser = null;
         let filterMyEvents = false;
         let allEvents = [];
-        let modalActive = false; // Guard to prevent re-opening on mouseup
+        let modalActive = false;
 
         presetColors.forEach(c => {
             const div = document.createElement('div');
@@ -475,6 +453,7 @@
                 monthCont.appendChild(legend);
                 container.appendChild(monthCont);
             }
+            console.log("Calendar UI Initialized");
         }
 
         function addToSelection(day) { day.classList.add('selected'); selectionPool.add(day); }
@@ -509,7 +488,6 @@
             overlay.style.display = 'none';
             noteInput.value = "";
             clearSelectionPool();
-            // Delay resetting modalActive slightly to allow click events to settle
             setTimeout(() => { modalActive = false; }, 100);
         }
 
@@ -527,37 +505,16 @@
             }
         };
 
-        function getInitials(name) {
-            if (!name) return "??";
-            const parts = name.trim().split(/\s+/);
-            if (parts.length >= 2) {
-                return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-            }
-            return name.substring(0, 2).toUpperCase();
-        }
-
         document.getElementById('btn-save').onclick = async (e) => {
             if (e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
             }
-            
             const note = noteInput.value.trim();
-            
-            if (!note) {
-                alert("Please enter a description.");
-                return;
-            }
-            
-            if (selectionPool.size === 0) {
-                alert("No days selected.");
-                hideModal();
-                return;
-            }
+            if (!note) { alert("Please enter a description."); return; }
+            if (selectionPool.size === 0) { alert("No days selected."); hideModal(); return; }
 
-            // Hardcode initials from user name
             const initials = getInitials(currentUser ? currentUser.displayName : "Guest User");
-
             const days = Array.from(selectionPool).map(d => ({
                 m: parseInt(d.dataset.m),
                 d: parseInt(d.dataset.d)
@@ -573,42 +530,29 @@
                 userName: currentUser ? (currentUser.displayName || currentUser.email) : 'Guest'
             };
 
-            console.log("PRE-SAVE VALIDATION:", JSON.stringify(eventData));
-
-            // IMMEDIATELY HIDE MODAL
             hideModal();
 
             try {
                 if (db && currentUser) {
                     loadingIndicator.textContent = "Saving to cloud...";
-                    const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'events');
-                    console.log("Firestore Call Start. Path:", colRef.path);
-                    
-                    await addDoc(colRef, eventData)
-                        .then((docRef) => {
-                            console.log("SAVE SUCCESS! Doc ID:", docRef.id);
-                            loadingIndicator.textContent = "Cloud Active";
-                        })
-                        .catch((err) => {
-                            console.error("FIRESTORE REJECTED WRITE:", err);
-                            loadingIndicator.textContent = "Save Error";
-                            alert("Firestore Error: " + err.message);
-                        });
+                    const colRef = collection(db, 'artifacts', currentCid, 'public', 'data', 'events');
+                    await addDoc(colRef, eventData);
+                    console.log("Save Success");
+                    loadingIndicator.textContent = "Cloud Active";
                 } else {
-                    console.warn("Saving to Local State ONLY (No Cloud Connection)");
                     allEvents.push(eventData);
                     renderEvents();
                 }
             } catch (err) { 
-                console.error("UNEXPECTED SAVE CRASH:", err);
+                console.error("Save error:", err);
                 loadingIndicator.textContent = "Save Error";
-                alert("Unexpected Error: " + err.message);
+                alert("Error saving: " + err.message);
             }
         };
 
         if (auth) {
             onAuthStateChanged(auth, (user) => {
-                console.log("Auth Status Changed:", user ? user.email : "Logged Out");
+                console.log("Auth Changed:", user ? user.email : "Logged Out");
                 currentUser = user;
                 if (user) {
                     userInfo.textContent = `Signed in as: ${user.displayName || user.email}`;
@@ -621,13 +565,12 @@
                     loadingIndicator.textContent = "Read Only Mode";
                     allEvents = [];
                     renderEvents();
-                    startListening(); // Listen even if not logged in (Public data)
+                    startListening();
                 }
             });
         }
 
         function renderEvents() {
-            console.log("Rendering Events. Total:", allEvents.length);
             document.querySelectorAll('.stripe-container').forEach(c => c.innerHTML = '');
             document.querySelectorAll('.legend-panel').forEach(l => l.innerHTML = '');
 
@@ -663,20 +606,11 @@
 
         let unsubscribeEvents = null;
         function startListening() {
-            if (!db) {
-                console.warn("DB not ready, skipping listener");
-                return;
-            }
-            if (unsubscribeEvents) {
-                console.log("Closing existing listener");
-                unsubscribeEvents(); // Stop previous listener
-                unsubscribeEvents = null;
-            }
-
-            const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'events');
-            console.log("Starting listener on:", colRef.path);
+            if (!db) return;
+            if (unsubscribeEvents) { unsubscribeEvents(); unsubscribeEvents = null; }
+            const colRef = collection(db, 'artifacts', currentCid, 'public', 'data', 'events');
+            console.log("Listening on:", colRef.path);
             unsubscribeEvents = onSnapshot(colRef, (snapshot) => {
-                console.log("Snapshot Update:", snapshot.size, "documents");
                 allEvents = snapshot.docs.map(doc => doc.data());
                 renderEvents();
             }, (err) => { 
@@ -693,8 +627,15 @@
         
         btnFilterMe.onclick = () => { filterMyEvents = !filterMyEvents; btnFilterMe.classList.toggle('active', filterMyEvents); renderEvents(); };
         btnShare.onclick = () => { 
-            const d = document.createElement('input'); document.body.appendChild(d); d.value = window.location.href; d.select(); document.execCommand('copy'); document.body.removeChild(d);
-            document.getElementById('toast').style.display='block'; setTimeout(()=>document.getElementById('toast').style.display='none',2000);
+            const dummy = document.createElement('input'); 
+            document.body.appendChild(dummy); 
+            dummy.value = window.location.href; 
+            dummy.select(); 
+            document.execCommand('copy'); 
+            document.body.removeChild(dummy);
+            const toast = document.getElementById('toast');
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 2000);
         };
 
         initCalendarUI();
