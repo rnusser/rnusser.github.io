@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.15</div>
+    <div class="version-tag">v1.1.16</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -364,6 +364,17 @@
             }
         };
         document.querySelector('.controls').appendChild(testBtn);
+
+        // CONFIG DUMP
+        const configBtn = document.createElement('button');
+        configBtn.className = 'tool-btn';
+        configBtn.textContent = 'CONFIG DUMP';
+        configBtn.onclick = () => {
+            console.log("--- RUNTIME FIREBASE CONFIG ---");
+            console.log(JSON.stringify(firebaseConfig, null, 2));
+            alert("Project: " + firebaseConfig.projectId + "\nCheck console for full JSON dump.");
+        };
+        document.querySelector('.controls').appendChild(configBtn);
 
         function withTimeout(promise, ms) {
             return new Promise((resolve, reject) => {
