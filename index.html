@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.5</div>
+    <div class="version-tag">v1.1.6</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -545,17 +545,16 @@
             }));
             
             const eventData = {
-                note,
-                initials,
+                note: note,
+                initials: initials,
                 color: selectedColor,
-                days,
+                days: days,
                 timestamp: Date.now(),
                 userId: currentUser ? currentUser.uid : 'local',
                 userName: currentUser ? (currentUser.displayName || currentUser.email) : 'Guest'
             };
 
-            console.log("Saving Event:", eventData);
-            console.log("App ID:", appId);
+            console.log("PRE-SAVE VALIDATION:", JSON.stringify(eventData));
 
             // IMMEDIATELY HIDE MODAL
             hideModal();
@@ -564,19 +563,27 @@
                 if (db && currentUser) {
                     loadingIndicator.textContent = "Saving to cloud...";
                     const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'events');
-                    console.log("Firestore Collection Path:", colRef.path);
-                    await addDoc(colRef, eventData);
-                    console.log("Save Successful");
-                    loadingIndicator.textContent = "Cloud Active";
+                    console.log("Firestore Call Start. Path:", colRef.path);
+                    
+                    await addDoc(colRef, eventData)
+                        .then((docRef) => {
+                            console.log("SAVE SUCCESS! Doc ID:", docRef.id);
+                            loadingIndicator.textContent = "Cloud Active";
+                        })
+                        .catch((err) => {
+                            console.error("FIRESTORE REJECTED WRITE:", err);
+                            loadingIndicator.textContent = "Save Error";
+                            alert("Firestore Error: " + err.message);
+                        });
                 } else {
-                    console.warn("Saving to Local State ONLY. DB:", !!db, "User:", !!currentUser);
+                    console.warn("Saving to Local State ONLY (No Cloud Connection)");
                     allEvents.push(eventData);
                     renderEvents();
                 }
             } catch (err) { 
-                console.error("Save error:", err);
+                console.error("UNEXPECTED SAVE CRASH:", err);
                 loadingIndicator.textContent = "Save Error";
-                alert("Error saving: " + err.message);
+                alert("Unexpected Error: " + err.message);
             }
         };
 
