@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.2.0</div>
+    <div class="version-tag">v1.2.1</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -530,7 +530,7 @@
                 if (db && currentUser) {
                     loadingIndicator.textContent = "Syncing...";
                     const colRef = collection(db, 'artifacts', currentCid, 'public', 'data', 'events');
-                    await withTimeout(addDoc(colRef, eventData), 8000);
+                    await addDoc(colRef, eventData);
                     console.log("SAVE SUCCESS");
                     loadingIndicator.textContent = "Online";
                 } else {
