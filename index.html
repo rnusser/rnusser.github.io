@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.1.17</div>
+    <div class="version-tag">v1.2.0</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -332,58 +332,6 @@
         const btnShare = document.getElementById('btn-share');
         const recentList = document.getElementById('recent-list');
         
-        // Manual Sync
-        const syncBtn = document.createElement('button');
-        syncBtn.id = 'btn-sync';
-        syncBtn.className = 'tool-btn';
-        syncBtn.textContent = 'RE-SYNC';
-        syncBtn.onclick = () => { console.log("MANUAL SYNC TRIGGERED"); startListening(); };
-        document.querySelector('.controls').appendChild(syncBtn);
-
-        // Simple Connection Test
-        const testBtn = document.createElement('button');
-        testBtn.id = 'btn-test-cloud';
-        testBtn.className = 'tool-btn';
-        testBtn.textContent = 'TEST CLOUD';
-        testBtn.style.borderColor = '#ff79c6';
-        testBtn.onclick = async () => {
-            if (!db || !currentUser) { alert("Sign in first!"); return; }
-            console.log("--- STARTING CLOUD TEST ---");
-            const testRef = collection(db, 'test_connection');
-            try {
-                const docRef = await withTimeout(addDoc(testRef, { 
-                    time: Date.now(), 
-                    user: currentUser.email,
-                    cid: currentCid 
-                }), 8000);
-                console.log("TEST SUCCESS! ID:", docRef.id);
-                alert("Cloud Connection Verified!");
-            } catch (e) {
-                console.error("TEST FAILED:", e);
-                alert("Cloud Test Failed: " + e.message + "\n(If 400, ensure Firestore API is enabled in Console)");
-            }
-        };
-        document.querySelector('.controls').appendChild(testBtn);
-
-        // CONFIG DUMP
-        const configBtn = document.createElement('button');
-        configBtn.className = 'tool-btn';
-        configBtn.textContent = 'CONFIG DUMP';
-        configBtn.onclick = () => {
-            console.log("--- RUNTIME FIREBASE CONFIG ---");
-            console.log(JSON.stringify(firebaseConfig, null, 2));
-            alert("Project: " + firebaseConfig.projectId + "\nCheck console for full JSON dump.");
-        };
-        document.querySelector('.controls').appendChild(configBtn);
-
-        function withTimeout(promise, ms) {
-            return new Promise((resolve, reject) => {
-                const timer = setTimeout(() => reject(new Error("Timeout (Server unreachable)")), ms);
-                promise.then(res => { clearTimeout(timer); resolve(res); })
-                       .catch(err => { clearTimeout(timer); reject(err); });
-            });
-        }
-
         // --- Sidebar & Persistence ---
         function getRecentCalendars() {
             try { return JSON.parse(localStorage.getItem('recent_cids') || '[]'); } catch (e) { return []; }
@@ -641,8 +589,7 @@
                     if (legendPanel) {
                         const item = document.createElement('div');
                         item.className = 'legend-item';
-                        const syncIcon = _pending ? ' (⌛ Syncing...)' : '';
-                        item.innerHTML = `<div class="legend-text"><span class="initials-tag" style="color:${color}">[${initials}]</span> <span>${note}${syncIcon}</span></div>`;
+                        item.innerHTML = `<div class="legend-text"><span class="initials-tag" style="color:${color}">[${initials}]</span> <span>${note}</span></div>`;
                         legendPanel.appendChild(item);
                     }
                 }
