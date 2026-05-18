@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.2.1</div>
+    <div class="version-tag">v1.2.2</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -334,45 +334,71 @@
         
         // --- Sidebar & Persistence ---
         function getRecentCalendars() {
-            try { return JSON.parse(localStorage.getItem('recent_cids') || '[]'); } catch (e) { return []; }
+            try { 
+                const data = localStorage.getItem('recent_cids_v2');
+                return data ? JSON.parse(data) : []; 
+            } catch (e) { return []; }
         }
 
-        function saveRecentCalendar(cid) {
+        function saveRecentCalendar(cid, name = null) {
             let recents = getRecentCalendars();
-            if (!recents.includes(cid)) {
-                recents.unshift(cid);
-                recents = recents.slice(0, 15);
-                localStorage.setItem('recent_cids', JSON.stringify(recents));
+            const existingIdx = recents.findIndex(item => item.cid === cid);
+            
+            if (existingIdx !== -1) {
+                if (name) recents[existingIdx].name = name;
+                const item = recents.splice(existingIdx, 1)[0];
+                recents.unshift(item);
+            } else {
+                recents.unshift({ cid, name: name || cid });
             }
+            
+            recents = recents.slice(0, 15);
+            localStorage.setItem('recent_cids_v2', JSON.stringify(recents));
             renderSidebar();
         }
 
         function removeRecentCalendar(cid) {
-            let recents = getRecentCalendars().filter(id => id !== cid);
-            localStorage.setItem('recent_cids', JSON.stringify(recents));
+            let recents = getRecentCalendars().filter(item => item.cid !== cid);
+            localStorage.setItem('recent_cids_v2', JSON.stringify(recents));
             renderSidebar();
         }
 
         function renderSidebar() {
             const recents = getRecentCalendars();
             recentList.innerHTML = '';
-            recents.forEach(cid => {
-                const item = document.createElement('div');
-                item.className = 'recent-item' + (cid === currentCid ? ' active' : '');
-                item.textContent = cid;
-                item.onclick = () => {
-                    const action = prompt(`Calendar: ${cid}\nType "open" or "delete":`, 'open');
+            recents.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'recent-item' + (item.cid === currentCid ? ' active' : '');
+                div.textContent = item.name || item.cid;
+                div.title = item.cid;
+                div.onclick = () => {
+                    const action = prompt(`Calendar: ${item.name || item.cid}\nType "open" to switch, or "delete" to remove:`, 'open');
                     if (action === 'open') {
-                        window.location.href = window.location.pathname + '?cid=' + cid;
+                        window.location.href = window.location.pathname + '?cid=' + item.cid;
                     } else if (action === 'delete') {
-                        removeRecentCalendar(cid);
+                        removeRecentCalendar(item.cid);
                     }
                 };
-                recentList.appendChild(item);
+                recentList.appendChild(div);
             });
         }
 
+        // Add RENAME CALENDAR button
+        const btnEditName = document.createElement('button');
+        btnEditName.className = 'tool-btn';
+        btnEditName.textContent = 'RENAME CALENDAR';
+        btnEditName.onclick = () => {
+            const currentItem = getRecentCalendars().find(i => i.cid === currentCid);
+            const currentName = currentItem ? currentItem.name : '';
+            const newName = prompt("Enter a friendly name (e.g. RN_Holidays):", currentName || "");
+            if (newName !== null) {
+                saveRecentCalendar(currentCid, newName.trim());
+            }
+        };
+        document.querySelector('.controls').appendChild(btnEditName);
+
         saveRecentCalendar(currentCid);
+        renderSidebar();
 
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const weekdays = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
