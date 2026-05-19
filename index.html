@@ -240,7 +240,7 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.2.2</div>
+    <div class="version-tag">v1.3.0</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
@@ -268,7 +268,7 @@
         // DOWNGRADE SDK TO STABLE 10.13.0
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, doc, getDocs, getDocsFromServer } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, doc, getDocs, getDocsFromServer, setDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
         // Global Error Handler
         window.onerror = function(msg, url, line, col, error) {
@@ -308,14 +308,14 @@
         }
         
         currentCid = calendarIdFromUrl;
-        console.log("INITIALIZATION v1.1.15 - CID:", currentCid, "Project:", firebaseConfig.projectId);
+        console.log("INITIALIZATION v1.3.0 - CID:", currentCid, "Project:", firebaseConfig.projectId);
 
         let db = null, auth = null;
         try {
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
-            db = getFirestore(app); // Revert to standard getFirestore (SDK 10.x handles networking automatically)
-            console.log("Firebase/Firestore Initialized (SDK 10.13.0)");
+            db = getFirestore(app); 
+            console.log("Firebase/Firestore Initialized");
         } catch (e) {
             console.error("FIREBASE INIT ERROR:", e);
         }
@@ -331,6 +331,7 @@
         const btnFilterMe = document.getElementById('btn-filter-me');
         const btnShare = document.getElementById('btn-share');
         const recentList = document.getElementById('recent-list');
+        const headerTitle = document.querySelector('h1');
         
         // --- Sidebar & Persistence ---
         function getRecentCalendars() {
@@ -387,12 +388,24 @@
         const btnEditName = document.createElement('button');
         btnEditName.className = 'tool-btn';
         btnEditName.textContent = 'RENAME CALENDAR';
-        btnEditName.onclick = () => {
+        btnEditName.onclick = async () => {
             const currentItem = getRecentCalendars().find(i => i.cid === currentCid);
             const currentName = currentItem ? currentItem.name : '';
             const newName = prompt("Enter a friendly name (e.g. RN_Holidays):", currentName || "");
+            
             if (newName !== null) {
-                saveRecentCalendar(currentCid, newName.trim());
+                const trimmedName = newName.trim();
+                // 1. Save locally for sidebar
+                saveRecentCalendar(currentCid, trimmedName);
+                
+                // 2. Sync to Cloud
+                if (db && currentUser) {
+                    try {
+                        const metaRef = doc(db, 'artifacts', currentCid, 'public', 'settings');
+                        await setDoc(metaRef, { name: trimmedName }, { merge: true });
+                        console.log("Cloud name updated");
+                    } catch (e) { console.error("Cloud name sync failed", e); }
+                }
             }
         };
         document.querySelector('.controls').appendChild(btnEditName);
@@ -578,12 +591,14 @@
                     userInfo.textContent = `User: ${user.displayName || user.email}`;
                     btnLogin.textContent = "SIGN OUT";
                     startListening();
+                    startListeningMetadata();
                 } else {
                     userInfo.textContent = "Guest Mode";
                     btnLogin.textContent = "SIGN IN";
                     allEvents = [];
                     renderEvents();
                     startListening();
+                    startListeningMetadata();
                 }
             });
         }
@@ -644,6 +659,24 @@
             }, (err) => { 
                 console.error("LISTENER ERROR:", err);
                 loadingIndicator.textContent = "Sync Error"; 
+            });
+        }
+
+        let unsubscribeMetadata = null;
+        function startListeningMetadata() {
+            if (!db) return;
+            if (unsubscribeMetadata) { unsubscribeMetadata(); unsubscribeMetadata = null; }
+            
+            const metaRef = doc(db, 'artifacts', currentCid, 'public', 'settings');
+            unsubscribeMetadata = onSnapshot(metaRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.data();
+                    if (data.name) {
+                        headerTitle.textContent = data.name.toUpperCase();
+                        document.title = data.name + " - 2026 Calendar";
+                        saveRecentCalendar(currentCid, data.name);
+                    }
+                }
             });
         }
 
