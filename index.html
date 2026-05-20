@@ -213,6 +213,21 @@
             background: #151515;
         }
 
+        /* Budget Tracker Styles */
+        .budget-item {
+            font-size: 0.7rem;
+            padding: 8px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            margin-bottom: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .budget-color-strip { width: 100%; height: 3px; }
+        .budget-stats { display: flex; justify-content: space-between; }
+        .budget-remaining { font-weight: bold; color: var(--accent); }
+
         /* Adjust main body padding for sidebar */
         body {
             padding-right: 200px;
@@ -240,11 +255,13 @@
     <div id="calendar-container"></div>
     <div id="loading-indicator">Initializing...</div>
     <div id="toast" class="toast">Link copied!</div>
-    <div class="version-tag">v1.3.0</div>
+    <div class="version-tag">v1.4.0</div>
 
     <aside id="sidebar-recent">
         <div class="sidebar-title">RECENT CALENDARS</div>
         <div id="recent-list"></div>
+        <div class="sidebar-title" style="margin-top:20px">BUDGET TRACKER</div>
+        <div id="budget-list"></div>
     </aside>
 
     <div id="overlay"></div>
@@ -268,7 +285,7 @@
         // DOWNGRADE SDK TO STABLE 10.13.0
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, doc, getDocs, getDocsFromServer, setDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, doc, getDocs, getDocsFromServer, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
         // Global Error Handler
         window.onerror = function(msg, url, line, col, error) {
@@ -331,8 +348,32 @@
         const btnFilterMe = document.getElementById('btn-filter-me');
         const btnShare = document.getElementById('btn-share');
         const recentList = document.getElementById('recent-list');
+        const budgetList = document.getElementById('budget-list');
         const headerTitle = document.querySelector('h1');
+
+        let colorBudgets = {}; // { color: maxDays }
         
+        // Add ALLOCATE BUDGET button
+        const btnAllocate = document.createElement('button');
+        btnAllocate.className = 'tool-btn';
+        btnAllocate.textContent = 'ALLOCATE BUDGET';
+        btnAllocate.onclick = async () => {
+            const limit = prompt("Enter max days for the currently selected color:");
+            if (limit !== null) {
+                const max = parseInt(limit);
+                if (isNaN(max)) return alert("Please enter a number.");
+                
+                if (db && currentUser) {
+                    try {
+                        const bRef = doc(db, 'artifacts', currentCid, 'public', 'budgets');
+                        await setDoc(bRef, { [selectedColor]: max }, { merge: true });
+                        console.log("Budget synced to cloud");
+                    } catch (e) { console.error("Budget sync failed", e); }
+                }
+            }
+        };
+        document.querySelector('.controls').appendChild(btnAllocate);
+
         // --- Sidebar & Persistence ---
         function getRecentCalendars() {
             try { 
@@ -592,6 +633,7 @@
                     btnLogin.textContent = "SIGN OUT";
                     startListening();
                     startListeningMetadata();
+                    startListeningBudgets();
                 } else {
                     userInfo.textContent = "Guest Mode";
                     btnLogin.textContent = "SIGN IN";
@@ -599,20 +641,29 @@
                     renderEvents();
                     startListening();
                     startListeningMetadata();
+                    startListeningBudgets();
                 }
             });
         }
 
         function renderEvents() {
+            console.log("Rendering", allEvents.length, "events");
             document.querySelectorAll('.stripe-container').forEach(c => c.innerHTML = '');
             document.querySelectorAll('.legend-panel').forEach(l => l.innerHTML = '');
+
+            // Calculate usage per color
+            const usage = {}; // { color: totalDays }
+            allEvents.forEach(e => {
+                usage[e.color] = (usage[e.color] || 0) + e.days.length;
+            });
+            renderBudgetTracker(usage);
 
             const visibleEvents = (filterMyEvents && currentUser)
                 ? allEvents.filter(e => e.userId === currentUser.uid) 
                 : allEvents;
 
             visibleEvents.forEach(data => {
-                const { days, color, note, initials, _pending } = data;
+                const { id, days, color, note, initials } = data;
                 days.forEach(dayInfo => {
                     const dayEl = document.getElementById(`day-${dayInfo.m}-${dayInfo.d}`);
                     if (dayEl) {
@@ -630,9 +681,56 @@
                     if (legendPanel) {
                         const item = document.createElement('div');
                         item.className = 'legend-item';
+                        item.style.cursor = 'pointer';
+                        item.title = "Click to delete";
                         item.innerHTML = `<div class="legend-text"><span class="initials-tag" style="color:${color}">[${initials}]</span> <span>${note}</span></div>`;
+                        
+                        // ADD DELETION CAPABILITY
+                        item.onclick = async () => {
+                            if (confirm(`Delete holiday "${note}"?`)) {
+                                if (db && id) {
+                                    try {
+                                        await deleteDoc(doc(db, 'artifacts', currentCid, 'public', 'data', 'events', id));
+                                        console.log("Deleted doc:", id);
+                                    } catch (e) { alert("Delete failed: " + e.message); }
+                                }
+                            }
+                        };
                         legendPanel.appendChild(item);
                     }
+                }
+            });
+        }
+
+        function renderBudgetTracker(usage) {
+            budgetList.innerHTML = '';
+            Object.entries(colorBudgets).forEach(([color, max]) => {
+                const used = usage[color] || 0;
+                const remaining = max - used;
+                
+                const item = document.createElement('div');
+                item.className = 'budget-item';
+                item.innerHTML = `
+                    <div class="budget-color-strip" style="background:${color}"></div>
+                    <div class="budget-stats">
+                        <span>Used: <b>${used}</b> / ${max}</span>
+                    </div>
+                    <div class="budget-remaining">Left: ${remaining}</div>
+                `;
+                budgetList.appendChild(item);
+            });
+        }
+
+        let unsubscribeBudgets = null;
+        function startListeningBudgets() {
+            if (!db) return;
+            if (unsubscribeBudgets) { unsubscribeBudgets(); unsubscribeBudgets = null; }
+            
+            const bRef = doc(db, 'artifacts', currentCid, 'public', 'budgets');
+            unsubscribeBudgets = onSnapshot(bRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    colorBudgets = snapshot.data();
+                    renderEvents(); // Trigger re-render to update tracker
                 }
             });
         }
